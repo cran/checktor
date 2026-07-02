@@ -1,0 +1,175 @@
+---
+title: "Getting Started with checktor"
+vignette: >
+  %\VignetteIndexEntry{Getting Started with checktor}
+  %\VignetteEngine{quarto::html}
+  %\VignetteEncoding{UTF-8}
+knitr:
+  opts_chunk:
+    collapse: true
+    comment: '#>'
+---
+
+```{r}
+#| label: setup
+#| include: false
+library(checktor)
+```
+
+## The gap checktor fills
+
+`R CMD check` answers one question well: does this package build and run? It is
+silent on the question that actually decides your submission: will a CRAN
+volunteer, reading by hand, send it back? Those are different questions, and the
+space between them is where afternoons disappear. A title that isn't in title
+case. A missing `\value{}` tag. A stray `T` where you meant `TRUE`.
+
+`checktor` is the specialist your build refers you to before that appointment.
+It runs the extra-CRAN checks that live in the Repository Policy and reviewers'
+long memories but nowhere in the standard toolchain, and, true to the name, it
+gives you a checkup, a diagnosis, and a prescription.
+
+## Installation
+
+`checktor` lives on GitHub for now; once it reaches CRAN you will be able to
+`install.packages("checktor")`. Until then, install the development version:
+
+```{r eval=FALSE}
+# install.packages("pak")
+pak::pak("coatless-rpkg/checktor")
+```
+
+## A first checkup
+
+`checktor()` examines a package directory. So we can watch it work without
+maiming your own package, we will point it at a throwaway package built around
+one deliberately bad file:
+
+```{r}
+pkg <- example_diagnose_scenario("code_examples/tf_usage_bad.R",
+                                 show_content = FALSE)
+
+results <- checktor(pkg, verbose = FALSE, progress = FALSE)
+results
+```
+
+That is the bedside summary: which of the five categories (code, DESCRIPTION,
+documentation, general, and CRAN policy) need attention, and an overall verdict.
+On your own package the call is just `checktor()`. For the full catalogue of
+what each category checks, see the
+[function reference](https://r-pkg.thecoatlessprofessor.com/checktor/reference/index.html).
+
+## Reading the results as data
+
+The printed report is for humans. When you want to *compute* on the findings,
+filter them, count them, fold them into a report of your own, reach for the
+accessors. They return plain data frames, so you never spelunk through nested
+lists.
+
+```{r}
+summary(results)   # one row per category
+```
+
+```{r}
+issues(results)    # one row per issue, with file and line
+```
+
+`tidy(results)` gives one row per check, passed or not, and `as.data.frame()` is
+its alias. Three predicates answer the yes/no questions directly:
+
+```{r}
+is_healthy(results)
+n_issues(results)
+failed_checks(results)
+```
+
+Each accessor also works on a single category, as in `issues(results$code_issues)`,
+or on a single check.
+
+## The one-line gate
+
+For scripts and pre-submission checklists, `checkup()` collapses the whole
+diagnosis to a single verdict, `TRUE` when the package is clean:
+
+```{r}
+checkup(pkg)
+```
+
+It is built to be the last word in a shell one-liner; the
+[checktor in Continuous Integration](checktor-in-ci.html) vignette puts it in
+charge of a GitHub Actions build.
+
+## From diagnosis to treatment
+
+A diagnosis you cannot act on is just bad news. `prescribe()` turns each finding
+into a concrete remedy:
+
+```{r eval=FALSE}
+prescribe(results)
+```
+
+`health_report()` writes the whole consultation to a file, as Markdown, HTML, or
+plain text, to keep alongside your `cran-comments.md`:
+
+```{r eval=FALSE}
+health_report(results, file = "package-health.md")
+health_report(results, file = "package-health.html", format = "html")
+```
+
+## Examining one system at a time
+
+Each category runs on its own, which helps when you are fixing one thing and
+would rather not hear about the others:
+
+```{r eval=FALSE}
+diagnose_code_issues()           # just the R sources
+diagnose_description_issues()    # just DESCRIPTION
+diagnose_documentation_issues()  # just the .Rd files
+diagnose_general_issues()        # size, URLs
+diagnose_policy_violations()     # CRAN policy
+```
+
+## Turning down the volume
+
+`checktor()` is chatty by design. In a script, quiet it once and every later
+call inherits the setting:
+
+```{r eval=FALSE}
+configure_doctor(verbose_default = FALSE, progress_default = FALSE)
+
+# or per call
+results <- checktor(verbose = FALSE, progress = FALSE)
+```
+
+## Where it fits
+
+Run `checktor` in the gap between writing code and `R CMD check`:
+
+```{r eval=FALSE}
+devtools::document()
+devtools::test()
+
+results <- checktor()  # the extra-CRAN checkup
+prescribe(results)     # apply the remedies
+
+devtools::check()      # the standard checks
+```
+
+## Conclusion
+
+`checktor` is a checkup, not a cure-all. It complements `R CMD check` and
+[`lintr`](https://lintr.r-lib.org) rather than replacing either, and it cannot
+replace your judgment about whether a package is worth submitting. What it does
+do is the one thing those tools do not: it remembers the hand-enforced CRAN
+rules so you do not have to. Run the three together, treat the printed report as
+the conversation and the accessors as the data, and a reviewer should find
+nothing left to say. That is the entire point.
+
+## See also
+
+- [checktor in Continuous Integration](checktor-in-ci.html): put `checkup()` in
+  charge of a GitHub Actions build as a quality gate.
+- [Writing Your Own Checks](writing-checks.html): add project-specific checks
+  against the parsed syntax tree.
+- [Function reference](https://r-pkg.thecoatlessprofessor.com/checktor/reference/index.html):
+  the full catalogue of diagnostics.
