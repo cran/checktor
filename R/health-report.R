@@ -2,13 +2,19 @@
 
 #' Comprehensive Health Report
 #'
-#' @description Creates a comprehensive report with specific treatment instructions
+#' @description Creates a report of every failing check, whatever its severity
+#'   tier, with the treatment [prescribe()] gives for it. Every format carries
+#'   the same treatment text.
 #'
-#' @param results List. Results from checktor()
-#' @param file Character. Output file path (optional)
-#' @param format Character. Report format: "markdown", "html", or "text"
+#' @param results A `checktor_results` object from [checktor()].
+#' @param file Character. A path to write the report to, or `NULL` (the default)
+#'   to only return it.
+#' @param format Character. Report format: `"markdown"` (the default), `"html"`,
+#'   or `"text"`. Any other value gives the text format.
 #'
-#' @return Character vector with report content
+#' @return The report as a character vector, one element per line. It is
+#'   returned visibly even when `file` is given, so assign it to keep a console
+#'   call from printing it.
 #'
 #' @export
 #' @examples
@@ -38,11 +44,72 @@ health_report <- function(results, file = NULL, format = "markdown") {
   return(report)
 }
 
+# The checks of a result that failed, in report order, as result_checks() lists
+# them. A check fails when its category's `passed` vector says so, which is the
+# verdict apply_suppressions() keeps in step with any muted findings.
+# prescribe() and the report writers select through here, so they report the
+# same checks.
+failed_results <- function(results) {
+  Filter(
+    function(rc) {
+      passed <- results[[CATEGORY_FIELDS[[rc$category]]]]$passed
+      rc$name %in% names(passed) && !passed[[rc$name]]
+    },
+    result_checks(results)
+  )
+}
+
+# Every failing check in a result, flattened to list(category, check, result), so
+# the markdown, text and HTML writers all report the same findings. `category`
+# is the result's field, such as "code_issues".
+report_findings <- function(results) {
+  lapply(
+    Filter(function(rc) "issues" %in% names(rc$check), failed_results(results)),
+    function(rc) {
+      list(
+        category = CATEGORY_FIELDS[[rc$category]],
+        check = rc$name,
+        result = rc$check
+      )
+    }
+  )
+}
+
+# The first `n` of a check's findings, and how many more there are, for a
+# report that lists a few and counts the rest.
+truncate_issues <- function(issues, n) {
+  list(shown = utils::head(issues, n), extra = length(issues) - n)
+}
+
+# A sentence naming any check that did not run, so a report never reads as though
+# everything was examined when it was not.
+report_skipped_line <- function(results) {
+  skipped <- results$metadata$skipped_checks
+  if (length(skipped) == 0L) {
+    return(character(0))
+  }
+  paste0(
+    "Checks that did not run: ",
+    paste(skipped, collapse = ", "),
+    "."
+  )
+}
+
+pretty_label <- function(x) gsub("_", " ", tools::toTitleCase(x))
+
+# Findings carry things like <YEAR> and <COPYRIGHT HOLDER>, which would otherwise
+# be swallowed as markup by a browser.
+escape_html <- function(x) {
+  x <- gsub("&", "&amp;", x, fixed = TRUE)
+  x <- gsub("<", "&lt;", x, fixed = TRUE)
+  gsub(">", "&gt;", x, fixed = TRUE)
+}
+
 generate_markdown_report <- function(results) {
   report <- c(
     "# Package Doctor - Health Report",
     "",
-    paste("**Patient:** `", results$metadata$package_path, "`", sep = ""),
+    paste("**Patient:** `", package_label(results$metadata$package_path), "`", sep = ""),
     paste("**Examination Date:** ", results$metadata$diagnosis_time),
     paste("**Doctor Version:** ", results$metadata$checktor_version),
     "",
@@ -52,115 +119,91 @@ generate_markdown_report <- function(results) {
 
   total_issues <- results$metadata$total_issues
   if (total_issues == 0) {
-    report <- c(report,
-                "**CLEAN BILL OF HEALTH** - Your package appears ready for CRAN submission.",
-                "",
-                "### Next Steps",
-                "1. Run `R CMD check` or `devtools::check()` for standard checks",
-                "2. Review the [CRAN submission checklist](https://cran.r-project.org/web/packages/submission_checklist.html)",
-                "3. Submit to CRAN with confidence!"
+    report <- c(
+      report,
+      "**CLEAN BILL OF HEALTH** - Your package appears ready for CRAN submission.",
+      "",
+      "### Next Steps",
+      "1. Run `R CMD check` or `devtools::check()` for standard checks",
+      "2. Review the [CRAN submission checklist](https://cran.r-project.org/web/packages/submission_checklist.html)",
+      "3. Submit to CRAN with confidence!"
     )
   } else {
-    report <- c(report,
-                paste("**REQUIRES TREATMENT:** ", total_issues, " issue(s) found that should be addressed before CRAN submission."),
-                ""
+    report <- c(
+      report,
+      paste(
+        "**REQUIRES TREATMENT:** ",
+        total_issues,
+        " issue(s) found that should be addressed before CRAN submission."
+      ),
+      ""
     )
 
-    # Add detailed sections for each category with issues
-    categories <- c("code_issues", "description_issues", "documentation_issues", "general_issues")
+    # The total counts only the tiers the verdict is about, so say what the
+    # sections below actually contain rather than letting the two disagree.
+    advisory <- results$metadata$advisory_issues
+    if (!is.null(advisory) && advisory > 0L) {
+      report <- c(
+        report,
+        paste0(
+          "Every failing check is listed below, including ",
+          advisory,
+          " advisory finding(s) that do not count toward that total."
+        ),
+        ""
+      )
+    }
 
-    for (category in categories) {
-      if (category %in% names(results)) {
-        cat_results <- results[[category]]
-        if ("passed" %in% names(cat_results)) {
-          failed_checks <- names(cat_results$passed)[!cat_results$passed]
-          if (length(failed_checks) > 0) {
-            cat_name <- gsub("_", " ", tools::toTitleCase(category))
-            report <- c(report, paste("## ", cat_name), "")
+    findings <- report_findings(results)
+    current <- ""
+    for (finding in findings) {
+      if (!identical(finding$category, current)) {
+        current <- finding$category
+        report <- c(report, paste("## ", pretty_label(current)), "")
+      }
+      check_result <- finding$result
+      report <- c(report, paste("### ", pretty_label(finding$check)))
 
-            for (check in failed_checks) {
-              check_result <- cat_results[[check]]
-              if (is.list(check_result) && "issues" %in% names(check_result)) {
-                report <- c(report, paste("### ", gsub("_", " ", tools::toTitleCase(check))))
-
-                # Add specific treatment instructions based on check type
-                treatment_instructions <- get_treatment_instructions(check, check_result)
-                if (!is.null(treatment_instructions)) {
-                  report <- c(report, "", "**Treatment:**", treatment_instructions, "")
-                }
-
-                if (length(check_result$issues) > 0) {
-                  report <- c(report, "**Affected Areas:**")
-                  for (issue in utils::head(check_result$issues, 10)) {
-                    report <- c(report, paste("- `", issue, "`", sep = ""))
-                  }
-                  if (length(check_result$issues) > 10) {
-                    report <- c(report, paste("- ... and", length(check_result$issues) - 10, "more"))
-                  }
-                  report <- c(report, "")
-                }
-              }
-            }
-          }
+      rx <- treatments[[finding$check]]
+      if (!is.null(rx)) {
+        report <- c(
+          report,
+          "",
+          paste("**Treatment:**", treatment_markdown(rx$treatment))
+        )
+        example <- treatment_example(rx, check_result)
+        if (length(example) > 0L) {
+          report <- c(report, "", "```r", example, "```")
         }
+        report <- c(report, "")
+      }
+
+      if (length(check_result$issues) > 0) {
+        issues <- truncate_issues(check_result$issues, 10)
+        report <- c(
+          report,
+          "**Affected Areas:**",
+          paste0("- `", issues$shown, "`"),
+          if (issues$extra > 0) paste("- ... and", issues$extra, "more"),
+          ""
+        )
       }
     }
   }
 
-  report <- c(report,
-              "",
-              "---",
-              "*Report generated by [checktor - The Package Doctor](https://github.com/coatless-rpkg/checktor)*"
+  skipped <- report_skipped_line(results)
+  if (length(skipped) > 0L) {
+    report <- c(report, "", skipped, "")
+  }
+
+  report <- c(
+    report,
+    "",
+    "---",
+    "*Report generated by [checktor - The Package Doctor](https://github.com/coatless-rpkg/checktor)*"
   )
 
   return(report)
-}
-
-get_treatment_instructions <- function(check_name, check_result) {
-  instructions <- switch(check_name,
-                         "tf_usage" = c(
-                           "Replace all instances of `T` with `TRUE` and `F` with `FALSE`.",
-                           "```r",
-                           "# Before treatment",
-                           "result <- T",
-                           "",
-                           "# After treatment",
-                           "result <- TRUE",
-                           "```"
-                         ),
-                         "seed_setting" = c(
-                           "Add a `seed` parameter to functions that set seeds:",
-                           "```r",
-                           "# Before treatment",
-                           "my_function <- function(data) {",
-                           "  set.seed(123)",
-                           "  # ...",
-                           "}",
-                           "",
-                           "# After treatment",
-                           "my_function <- function(data, seed = NULL) {",
-                           "  if (!is.null(seed)) set.seed(seed)",
-                           "  # ...",
-                           "}",
-                           "```"
-                         ),
-                         "print_cat_usage" = c(
-                           "Replace `print()`/`cat()` with `message()` or add verbose parameter:",
-                           "```r",
-                           "# Before treatment",
-                           "print('Processing...')",
-                           "",
-                           "# After treatment - Option 1",
-                           "message('Processing...')",
-                           "",
-                           "# After treatment - Option 2",
-                           "if (verbose) cat('Processing...\\n')",
-                           "```"
-                         ),
-                         NULL  # Default case
-  )
-
-  return(instructions)
 }
 
 generate_text_report <- function(results) {
@@ -168,16 +211,50 @@ generate_text_report <- function(results) {
   report <- c(
     "Package Doctor - Health Report",
     paste("Generated on:", results$metadata$diagnosis_time),
-    paste("Patient:", results$metadata$package_path),
+    paste("Patient:", package_label(results$metadata$package_path)),
     "",
     "Summary:",
     paste("Total Issues:", results$metadata$total_issues)
   )
 
   if (results$metadata$total_issues == 0) {
-    report <- c(report, "", "Clean bill of health! Package appears ready for CRAN.")
+    report <- c(
+      report,
+      "",
+      "Clean bill of health! Package appears ready for CRAN."
+    )
   } else {
-    report <- c(report, "", "Issues found - see detailed output from checktor() for treatments.")
+    report <- c(report, "", "Findings:")
+    current <- ""
+    for (finding in report_findings(results)) {
+      if (!identical(finding$category, current)) {
+        current <- finding$category
+        report <- c(report, "", paste0("  ", pretty_label(current)))
+      }
+      issues <- truncate_issues(finding$result$issues, 10)
+      report <- c(
+        report,
+        paste0("    ", pretty_label(finding$check)),
+        paste0("      - ", issues$shown, recycle0 = TRUE),
+        if (issues$extra > 0) paste0("      - ... and ", issues$extra, " more")
+      )
+      rx <- treatments[[finding$check]]
+      if (!is.null(rx)) {
+        report <- c(
+          report,
+          paste0("      Treatment: ", treatment_markdown(rx$treatment))
+        )
+        example <- treatment_example(rx, finding$result)
+        if (length(example) > 0L) {
+          report <- c(report, "", paste0("        ", example), "")
+        }
+      }
+    }
+  }
+
+  skipped <- report_skipped_line(results)
+  if (length(skipped) > 0L) {
+    report <- c(report, "", skipped)
   }
 
   return(report)
@@ -200,16 +277,88 @@ generate_html_report <- function(results) {
     "</head>",
     "<body>",
     "<h1 class='header'>Package Doctor - Health Report</h1>",
-    paste("<p><strong>Patient:</strong>", results$metadata$package_path, "</p>"),
-    paste("<p><strong>Examination Date:</strong>", results$metadata$diagnosis_time, "</p>"),
+    paste(
+      "<p><strong>Patient:</strong>",
+      escape_html(package_label(results$metadata$package_path)),
+      "</p>"
+    ),
+    paste(
+      "<p><strong>Examination Date:</strong>",
+      results$metadata$diagnosis_time,
+      "</p>"
+    ),
     "<div class='summary'>",
-    paste("<h2>Diagnosis:", results$metadata$total_issues, "issue(s) found</h2>")
+    paste(
+      "<h2>Diagnosis:",
+      results$metadata$total_issues,
+      "issue(s) found</h2>"
+    )
   )
 
   if (results$metadata$total_issues == 0) {
     html <- c(html, "<p class='success'>Clean bill of health!</p>")
   } else {
-    html <- c(html, "<p class='issue'>Treatment required - see checktor() output for details.</p>")
+    current <- ""
+    for (finding in report_findings(results)) {
+      if (!identical(finding$category, current)) {
+        if (nzchar(current)) {
+          html <- c(html, "</ul>")
+        }
+        current <- finding$category
+        html <- c(
+          html,
+          paste0("<h3>", escape_html(pretty_label(current)), "</h3>"),
+          "<ul>"
+        )
+      }
+      html <- c(
+        html,
+        paste0("<li><strong>", escape_html(pretty_label(finding$check)), "</strong>")
+      )
+      if (length(finding$result$issues) > 0) {
+        issues <- truncate_issues(finding$result$issues, 10)
+        html <- c(
+          html,
+          "<ul>",
+          paste0("<li>", escape_html(issues$shown), "</li>"),
+          if (issues$extra > 0) {
+            paste0("<li>... and ", issues$extra, " more</li>")
+          },
+          "</ul>"
+        )
+      }
+      rx <- treatments[[finding$check]]
+      if (!is.null(rx)) {
+        html <- c(
+          html,
+          paste0(
+            "<p><strong>Treatment:</strong> ",
+            treatment_html(rx$treatment),
+            "</p>"
+          )
+        )
+        example <- treatment_example(rx, finding$result)
+        if (length(example) > 0L) {
+          html <- c(
+            html,
+            paste0(
+              "<pre><code>",
+              paste(escape_html(example), collapse = "\n"),
+              "</code></pre>"
+            )
+          )
+        }
+      }
+      html <- c(html, "</li>")
+    }
+    if (nzchar(current)) {
+      html <- c(html, "</ul>")
+    }
+  }
+
+  skipped <- report_skipped_line(results)
+  if (length(skipped) > 0L) {
+    html <- c(html, paste0("<p>", escape_html(skipped), "</p>"))
   }
 
   html <- c(html, "</div>", "</body>", "</html>")
@@ -224,7 +373,10 @@ validate_package_directory <- function(path) {
   }
 
   if (!file.exists(file.path(path, "DESCRIPTION"))) {
-    cli::cli_abort("No DESCRIPTION file found in {.path {path}}. Is this an R package directory?")
+    cli::cli_abort(c(
+      "No DESCRIPTION file found in {.path {path}}, or in any directory above it.",
+      "i" = "checktor runs from anywhere inside a package. Is this one?"
+    ))
   }
 
   return(TRUE)

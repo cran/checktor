@@ -6,12 +6,28 @@
 #' package structure, and CRAN policy compliance to identify potential problems
 #' that could cause CRAN submission delays or rejections.
 #'
-#' @param path Character. Path to the R package directory. Defaults to current
-#'   directory (`"."`).
+#' @param path Character. Any directory inside the R package, or a file within
+#'   one. Defaults to the working directory (`"."`). checktor walks up to find the
+#'   `DESCRIPTION`, so running it from `R/` or `tests/testthat/` examines the whole
+#'   package rather than failing. See [find_package_root()].
 #' @param verbose Logical. Whether to print detailed diagnostic output to
 #'   console. Defaults to `getOption("checktor.verbose", TRUE)`.
 #' @param progress Logical. Whether to show progress bars during diagnostics.
 #'   Defaults to `getOption("checktor.progress", verbose)`.
+#' @param severity Character. Which severity tiers count toward the verdict:
+#'   any of `"policy"`, `"robustness"`, `"opinion"`. Defaults to
+#'   `getOption("checktor.severity", c("policy", "robustness"))`.
+#'
+#'   Every check still runs, and every finding stays in the result and appears in
+#'   [issues()] with its tier. What this argument decides is which findings count
+#'   against a clean bill of health. `"policy"` is a citable CRAN Repository
+#'   Policy or Writing R Extensions violation. `"robustness"` is a real defect
+#'   that CRAN will still accept, such as a `detectCores()` that may
+#'   return `NA`. `"opinion"` is a convention with no authority behind it.
+#'
+#'   The default therefore makes "0 issues" mean *nothing here will get you
+#'   rejected, and nothing here will crash a user*. Pass all three tiers to hold
+#'   yourself to the conventions as well.
 #'
 #' @return
 #' A `checktor_results` object (list) containing:
@@ -21,11 +37,17 @@
 #' - `documentation_issues`: Results from documentation diagnostics
 #' - `general_issues`: Results from general package diagnostics
 #' - `policy_issues`: Results from CRAN policy violation diagnostics
-#' - `metadata`: List with package path, diagnosis time, total issue count,
-#'   total failed-check count, and checktor version
+#' - `metadata`: List with the package path, the diagnosis time, the issue and
+#'   failed-check counts (`total_issues`, `failed_checks`), the `severity` tiers
+#'   they count, the findings outside those tiers (`advisory_issues`), the
+#'   findings muted by `Config/checktor/allow` (`suppressed`), the checks that
+#'   did not run (`skipped_checks`), the checks that run only when called
+#'   (`on_request_checks`), and the checktor version (`checktor_version`)
 #'
 #' Each diagnostic category contains a `passed` element showing which individual
-#' checks passed/failed, plus detailed results for each check.
+#' checks did not fail, plus detailed results for each check. A check that did
+#' not run is `TRUE` there, and its own `skipped` element records that it did
+#' not run.
 #'
 #' @details
 #' The function runs five categories of diagnostics: **Code**, **DESCRIPTION**,
@@ -34,10 +56,43 @@
 #' [diagnose_general_issues()], and [diagnose_policy_violations()] for the
 #' specific checks within each category.
 #'
-#' The `metadata$total_issues` figure counts the total number of distinct
-#' issues found across all checks (e.g., 80 lines using `T`/`F` count as 80,
-#' not 1). The `metadata$failed_checks` figure counts how many individual
-#' checks reported any issue at all.
+#' The `metadata$total_issues` figure counts the individual findings of the
+#' checks in the `severity` tiers (e.g., 80 lines using `T`/`F` count as 80,
+#' not 1), and `metadata$failed_checks` counts how many of those checks
+#' reported anything. Findings in the other tiers are still in the result and
+#' are counted in `metadata$advisory_issues` instead.
+#'
+#' A few checks never join a run, because no authority backs them or they ask
+#' about a submission workflow rather than the package. They are not skipped,
+#' since nothing tried to run them. `metadata$on_request_checks` names them;
+#' call `lab_<name>()` to run one.
+#'
+#' A package can configure checktor from `Config/checktor/*` fields in its own
+#' `DESCRIPTION` (comma-separated lists; `DESCRIPTION` has no comment syntax, so
+#' anything after the last name becomes part of it):
+#' - `Config/checktor/disable`: check names to skip entirely. A disabled check
+#'   does not run and is not counted anywhere in the results. To turn a check
+#'   off in every package, set `options(checktor.disable = "news_file")` once,
+#'   for example in `.Rprofile`; the two lists are combined.
+#' - `Config/checktor/allow`: `check` to mute a whole check, or `check:substring`
+#'   to mute only findings whose text contains `substring`. The check still
+#'   runs; muted findings are dropped from the results and tallied in
+#'   `metadata$suppressed`, while a `disable`d check is removed entirely and
+#'   never counted there.
+#' - `Config/checktor/software_names`, `Config/checktor/language_names`,
+#'   `Config/checktor/format_names`, `Config/checktor/acronyms`: names appended
+#'   to those checks' vocabularies.
+#'
+#' @section Options:
+#' - `checktor.verbose`, `checktor.progress`: the defaults for `verbose` and
+#'   `progress`. [configure_doctor()] sets both.
+#' - `checktor.severity`: the default tiers for `checktor()` and [checkup()].
+#' - `checktor.disable`: checks to leave out of every run, combined with
+#'   `Config/checktor/disable`.
+#' - `checktor.url_check`: `TRUE` or `FALSE` to run or skip [lab_url_liveness()]
+#'   wherever you are. It defaults to `interactive()`.
+#' - `checktor.spelling`: `FALSE` turns off [lab_spelling()], which is then
+#'   reported as skipped.
 #'
 #' @seealso
 #' [health_report()] to generate detailed reports, [prescribe()] for treatment
@@ -54,80 +109,89 @@
 #' summary(results)     # per-category overview
 #' issues(results)      # every issue as a tidy data frame
 #' is_healthy(results)  # FALSE
-checktor <- function(path = ".",
-                     verbose = getOption("checktor.verbose", TRUE),
-                     progress = getOption("checktor.progress", verbose)) {
+checktor <- function(
+  path = ".",
+  verbose = getOption("checktor.verbose", TRUE),
+  progress = getOption("checktor.progress", verbose),
+  severity = getOption("checktor.severity", c("policy", "robustness"))
+) {
+  path <- find_package_root(path)
   validate_package_directory(path)
+  severity <- match.arg(severity, SEVERITY_LEVELS, several.ok = TRUE)
+  # Every category reads the sources through one cache that lasts this run, so
+  # each file is parsed once rather than once per check; see R/cache.R.
+  local_run_cache()
 
   if (verbose) {
-    cli::cli_rule(left = "Package Doctor - Diagnostic Report",
-                  right = paste0("v", utils::packageVersion("checktor")))
+    cli::cli_rule(
+      left = "Package Doctor - Diagnostic Report",
+      right = paste0("v", utils::packageVersion("checktor"))
+    )
     cli::cli_text("Examining package at: {.path {path}}")
     cli::cli_text()
   }
 
-  categories <- list(
-    code_issues          = diagnose_code_issues,
-    description_issues   = diagnose_description_issues,
-    documentation_issues = diagnose_documentation_issues,
-    general_issues       = diagnose_general_issues,
-    policy_issues        = diagnose_policy_violations
+  categories <- stats::setNames(
+    lapply(CATEGORY_ORCHESTRATORS, match.fun),
+    CATEGORY_FIELDS[names(CATEGORY_ORCHESTRATORS)]
   )
 
   if (progress && verbose) {
-    cli::cli_progress_bar("Running diagnostics",
-                          total = length(categories), type = "tasks")
+    cli::cli_progress_bar(
+      "Running diagnostics",
+      total = length(categories),
+      type = "tasks"
+    )
   }
 
   results <- list()
   for (cat_name in names(categories)) {
-    if (progress && verbose) cli::cli_progress_update()
+    if (progress && verbose) {
+      cli::cli_progress_update()
+    }
     results[[cat_name]] <- categories[[cat_name]](path, verbose)
   }
-  if (progress && verbose) cli::cli_progress_done()
+  if (progress && verbose) {
+    cli::cli_progress_done()
+  }
 
-  counts <- count_results(results)
-  total_issues  <- counts$issues
+  config <- checktor_config(path)
+  suppression <- apply_suppressions(results, config)
+  results <- suppression$results
+
+  counts <- count_results(results, severity)
+  total_issues <- counts$issues
   failed_checks <- counts$failed_checks
 
-  if (verbose) {
-    cli::cli_text()
-    cli::cli_rule(left = "Diagnosis Summary")
-    if (total_issues == 0L) {
-      cli::cli_alert_success("Clean bill of health! No CRAN submission issues found.")
-      cli::cli_text("{.emph Your package appears ready for CRAN submission.}")
-    } else {
-      cli::cli_alert_danger(
-        "Found {total_issues} issue{?s} across {failed_checks} failed check{?s}"
-      )
-      cli::cli_text("Review the detailed diagnosis above for specific remedies.")
-      cli::cli_text()
-      cli::cli_text("Use {.code prescribe()} to get treatment recommendations.")
-    }
+  # Everything ran, so anything outside the verdict's tiers is still here to be
+  # reported -- just not counted against a clean bill of health.
+  advisory <- count_results(results, setdiff(SEVERITY_LEVELS, severity))$issues
 
-    cli::cli_text()
-    cli::cli_h3("Recommended Next Steps")
-    if (total_issues > 0L) {
-      cli::cli_ol(c(
-        "Apply the treatments suggested above",
-        "Run {.code devtools::check()} for standard R CMD check",
-        "Re-run {.code checktor()} to verify treatments",
-        "Submit to CRAN when diagnosis is clean"
-      ))
-    } else {
-      cli::cli_ol(c(
-        "Run {.code devtools::check()} for standard R CMD check",
-        "Review any additional CRAN submission requirements",
-        "Submit to CRAN with confidence!"
-      ))
-    }
+  # A check that did not run is not a check that passed, so the names travel with
+  # the results and the summary reports them.
+  skipped <- count_skipped(results)
+
+  if (verbose) {
+    print_diagnosis_summary(
+      total_issues,
+      failed_checks,
+      advisory,
+      skipped,
+      suppression$suppressed,
+      severity
+    )
   }
 
   results$metadata <- list(
-    package_path     = path,
-    diagnosis_time   = Sys.time(),
-    total_issues     = total_issues,
-    failed_checks    = failed_checks,
+    package_path = path,
+    diagnosis_time = Sys.time(),
+    total_issues = total_issues,
+    failed_checks = failed_checks,
+    severity = severity,
+    advisory_issues = advisory,
+    suppressed = suppression$suppressed,
+    skipped_checks = skipped$names,
+    on_request_checks = on_request_checks(),
     checktor_version = utils::packageVersion("checktor")
   )
 
@@ -135,30 +199,116 @@ checktor <- function(path = ".",
   invisible(results)
 }
 
-# Single walk over a checktor_results-shaped list. Returns a list with:
+# The checks that did not run, so the summary can report them instead of letting
+# a skipped check read as a passing one.
+count_skipped <- function(results) {
+  checks <- result_checks(results)
+  status <- vapply(checks, function(r) check_status(r$check), character(1))
+  check_names <- vapply(checks, `[[`, character(1), "name")
+  out <- check_names[status == "skipped"]
+  list(names = out, n = length(out))
+}
+
+# The findings of the checks in the `severity` tiers. Returns a list with:
 #   $issues        - total individual issues (e.g., 80 T/F hits -> 80)
-#   $failed_checks - number of sub-checks where any issue was found
-# A check that errored (no $issues, only $error) counts as one issue so it
-# surfaces in reports instead of being silently dropped.
-count_results <- function(results) {
-  issues <- 0L
-  failed <- 0L
-  for (cat in results) {
-    if (!is.list(cat)) next
-    if (!is.null(cat$passed)) {
-      failed <- failed + sum(!cat$passed, na.rm = TRUE)
-    }
-    for (nm in setdiff(names(cat), "passed")) {
-      check <- cat[[nm]]
-      if (!is.list(check)) next
-      if (!is.null(check$issues)) {
-        issues <- issues + length(check$issues)
-      } else if (isFALSE(check$passed)) {
-        issues <- issues + 1L
+#   $failed_checks - number of checks where any issue was found
+# A check that failed with no $issues counts as one issue, so it surfaces in
+# reports instead of being silently dropped.
+#
+# The headline verdict counts only the tiers it is a verdict ABOUT. Every check
+# still RUNS and its findings stay in the object; what `severity` decides is
+# whether a finding counts against a clean bill of health. So the default,
+# policy + robustness, makes "0 issues" mean "nothing here will get you rejected,
+# and nothing here will crash a user" -- rather than "nobody disagrees with any of
+# your stylistic choices", which is not a question anyone was asking.
+count_results <- function(results, severity = SEVERITY_LEVELS) {
+  checks <- result_checks(results)
+  check_names <- vapply(checks, `[[`, character(1), "name")
+  checks <- checks[check_severity(check_names) %in% severity]
+  failed <- vapply(checks, function(r) isFALSE(r$check$passed), logical(1))
+  issues <- vapply(
+    checks,
+    function(r) {
+      if (is.null(r$check$issues)) {
+        as.integer(isFALSE(r$check$passed))
+      } else {
+        length(r$check$issues)
       }
-    }
+    },
+    integer(1)
+  )
+  list(issues = sum(issues), failed_checks = sum(failed))
+}
+
+# The summary checktor() prints at the end of a verbose run: what was muted or
+# did not run, the verdict, and what to do next.
+print_diagnosis_summary <- function(
+  total_issues,
+  failed_checks,
+  advisory,
+  skipped,
+  suppressed,
+  severity
+) {
+  cli::cli_text()
+  cli::cli_rule(left = "Diagnosis Summary")
+  if (suppressed > 0L) {
+    cli::cli_alert_info(
+      "{suppressed} finding{?s} muted by Config/checktor."
+    )
   }
-  list(issues = issues, failed_checks = failed)
+  if (skipped$n > 0L) {
+    cli::cli_alert_info(
+      "{skipped$n} check{?s} did not run: {.val {skipped$names}}."
+    )
+  }
+  # Not a skip and never a penalty, just so you can find out they exist.
+  on_request <- on_request_checks()
+  if (length(on_request) > 0L) {
+    cli::cli_alert_info(
+      paste(
+        "{length(on_request)} check{?s} {?is/are} available on request:",
+        "{.val {on_request}}. Call {.code lab_<name>()} to run one."
+      )
+    )
+  }
+  if (total_issues == 0L) {
+    cli::cli_alert_success(
+      "Clean bill of health! No CRAN submission issues found."
+    )
+    cli::cli_text("{.emph Your package appears ready for CRAN submission.}")
+    if (advisory > 0L) {
+      cli::cli_alert_info(
+        "{advisory} advisory finding{?s} not counted here (severity: {.val {setdiff(SEVERITY_LEVELS, severity)}})."
+      )
+    }
+  } else {
+    cli::cli_alert_danger(
+      "Found {total_issues} issue{?s} across {failed_checks} failed check{?s}"
+    )
+    cli::cli_text(
+      "Review the detailed diagnosis above for specific remedies."
+    )
+    cli::cli_text()
+    cli::cli_text("Use {.code prescribe()} to get treatment recommendations.")
+  }
+
+  cli::cli_text()
+  cli::cli_h3("Recommended Next Steps")
+  if (total_issues > 0L) {
+    cli::cli_ol(c(
+      "Apply the treatments suggested above",
+      "Run {.code devtools::check()} for standard R CMD check",
+      "Re-run {.code checktor()} to verify treatments",
+      "Submit to CRAN when diagnosis is clean"
+    ))
+  } else {
+    cli::cli_ol(c(
+      "Run {.code devtools::check()} for standard R CMD check",
+      "Review any additional CRAN submission requirements",
+      "Submit to CRAN with confidence!"
+    ))
+  }
 }
 
 #' Print Method for checktor_results Objects
@@ -187,18 +337,33 @@ print.checktor_results <- function(x, ...) {
   cli::cli_text("Doctor version: {x$metadata$checktor_version}")
   cli::cli_text()
 
-  categories <- c("code_issues", "description_issues", "documentation_issues",
-                  "general_issues", "policy_issues")
-  for (cat in categories) {
-    if (!cat %in% names(x)) next
-    failed <- sum(!x[[cat]]$passed, na.rm = TRUE)
-    status <- if (failed == 0L) "HEALTHY"
-              else paste0(failed, " failing check", if (failed > 1L) "s" else "")
-    cat_label <- gsub("_", " ", toupper(cat))
+  cats <- present_categories(x)
+  for (short in names(cats)) {
+    failed <- sum(!cats[[short]]$passed, na.rm = TRUE)
+    status <- if (failed == 0L) {
+      "HEALTHY"
+    } else {
+      paste0(failed, " failing check", if (failed > 1L) "s" else "")
+    }
+    cat_label <- gsub("_", " ", toupper(CATEGORY_FIELDS[[short]]))
     cli::cli_text("{.strong {cat_label}}: {status}")
   }
 
   cli::cli_text()
+  suppressed <- x$metadata$suppressed
+  if (!is.null(suppressed) && suppressed > 0L) {
+    cli::cli_alert_info(
+      "{suppressed} finding{?s} muted by {.file Config/checktor}."
+    )
+  }
+  # A check that sat out is not a check that passed, so say so next to the verdict
+  # rather than letting a clean result imply everything was examined.
+  skipped <- x$metadata$skipped_checks
+  if (length(skipped) > 0L) {
+    cli::cli_alert_info(
+      "{length(skipped)} check{?s} did not run: {.val {skipped}}."
+    )
+  }
   total_issues <- x$metadata$total_issues
   if (total_issues == 0L) {
     cli::cli_alert_success("Overall health: EXCELLENT")
@@ -206,7 +371,9 @@ print.checktor_results <- function(x, ...) {
     cli::cli_alert_warning(
       "Overall health: NEEDS ATTENTION ({total_issues} issue{?s})"
     )
-    cli::cli_text("Run {.code summary()}, {.code issues()}, or {.code prescribe()} for details")
+    cli::cli_text(
+      "Run {.code summary()}, {.code issues()}, or {.code prescribe()} for details"
+    )
   }
   invisible(x)
 }
@@ -214,11 +381,9 @@ print.checktor_results <- function(x, ...) {
 # Human-friendly package label: the DESCRIPTION Package field if readable,
 # else the directory basename.
 package_label <- function(path) {
-  desc <- file.path(path, "DESCRIPTION")
-  if (file.exists(desc)) {
-    nm <- tryCatch(unname(read.dcf(desc, fields = "Package")[1, 1]),
-                   error = function(e) NA_character_)
-    if (!is.na(nm) && nzchar(nm)) return(nm)
+  nm <- description_value(path, "Package")
+  if (!is.na(nm) && nzchar(nm)) {
+    return(nm)
   }
   basename(normalizePath(path, mustWork = FALSE))
 }

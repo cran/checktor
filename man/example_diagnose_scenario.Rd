@@ -21,14 +21,20 @@ in the console. Default: \code{TRUE}.}
 
 \item{description_type}{Character. Type of DESCRIPTION file to create.
 Options: "minimal" (basic fields only), "bad" (with known issues),
-"good" (properly formatted). Default: "minimal".}
+"good" (properly formatted). Default: "minimal". Ignored when
+\code{example_path} is a \code{.txt} scenario, which becomes the \code{DESCRIPTION} itself.}
 
-\item{cleanup}{Logical. Whether to register cleanup of temporary directory
-on exit. Default: \code{FALSE} (user manages cleanup).}
+\item{cleanup}{Logical. Whether to delete the temporary package when the
+function that called \code{example_diagnose_scenario()} returns. Called at top
+level there is no such function, so the package stays until R removes the
+session's temporary directory. Default: \code{FALSE} (you manage cleanup).}
 }
 \value{
 Character. Path to the temporary package directory containing the example
-file. Returns \code{NULL} if the example file cannot be found.
+file. Returns \code{NULL}, with a warning, if the example file cannot be found. An
+\code{example_path} that is not an \code{.R}, \code{.Rd}, \code{.Rmd}, \code{.qmd}, \code{.Rnw}, \code{.txt},
+\code{.CITATION} or \code{.LICENSE} file is an error, since a package has no place for
+it.
 }
 \description{
 Creates a temporary package structure with a specified example file for
@@ -40,7 +46,11 @@ This function:
 \enumerate{
 \item Locates the specified example file in the package's \verb{inst/diagnose/} directory
 \item Creates a temporary package directory structure
-\item Copies the example file to the appropriate location
+\item Copies the example file to where a package keeps its kind: an \code{.R} file in
+\verb{R/}, an \code{.Rd} file in \verb{man/}, a vignette (\code{.Rmd}, \code{.qmd}, \code{.Rnw}) in
+\verb{vignettes/}, a DESCRIPTION scenario (\code{.txt}) as the \code{DESCRIPTION}, a
+citation scenario (\code{.CITATION}) as \code{inst/CITATION}, and a licence scenario
+(\code{.LICENSE}) as \code{LICENSE}
 \item Optionally displays the example file content
 \item Returns the path to the temporary package for diagnostic testing
 }
@@ -51,41 +61,45 @@ for running diagnostics, plus a basic \code{DESCRIPTION} file.
 \section{Example File Structure}{
 
 
-The temporary package created has this structure:
+The temporary package created has this structure. The example file goes in
+the one place its extension names, and the other directories stay empty:
 
-\if{html}{\out{<div class="sourceCode">}}\preformatted{/tmp/checktor_example_XXXX/
-|-- DESCRIPTION          # Basic or custom DESCRIPTION file
-|-- R/                   # Contains copied example R files
-|   `-- example.R        # The example file with issues
-|-- man/                 # Empty directory for .Rd files
-`-- tests/               # Empty directory for test files
+\if{html}{\out{<div class="sourceCode">}}\preformatted{<tempdir>/checktor_example_XXXX/
+|-- DESCRIPTION          # The template, or a .txt scenario itself
+|-- LICENSE              # A .LICENSE scenario; made only for one
+|-- NEWS.md              # So the NEWS check has nothing to report
+|-- cran-comments.md     # So the cran-comments check has nothing to report
+|-- R/                   # An .R scenario, such as tf_usage_bad.R
+|-- man/                 # An .Rd scenario, such as missing_value_tag.Rd
+|-- inst/CITATION        # A .CITATION scenario; made only for one
+|-- tests/               # Always empty
+`-- vignettes/           # An .Rmd, .qmd or .Rnw scenario; made only for one
 }\if{html}{\out{</div>}}
 }
 
 \examples{
-# Create scenario with T/F usage issues
+# A scenario with T/F usage issues. show_content defaults to TRUE, so the
+# offending file prints first
 pkg_path <- example_diagnose_scenario("code_examples/tf_usage_bad.R")
-result <- diagnose_tf_usage(pkg_path, verbose = TRUE)
+lab_tf_usage(pkg_path, verbose = FALSE)$issues
 issues(checktor(pkg_path, verbose = FALSE, progress = FALSE))
-
-# Create scenario without showing file content
-pkg_path <- example_diagnose_scenario("code_examples/seed_setting_bad.R",
-                                      show_content = FALSE)
-
-# Create scenario with problematic DESCRIPTION file
-pkg_path <- example_diagnose_scenario("description_examples/bad_description.txt",
-                                      description_type = "bad")
-desc_result <- diagnose_description_issues(pkg_path)
-
-# Manual cleanup when done
 unlink(pkg_path, recursive = TRUE)
 
-# Or use with automatic cleanup
-pkg_path <- example_diagnose_scenario("code_examples/browser_calls_bad.R",
-                                      cleanup = TRUE)
-# Cleanup happens automatically when R session ends
+# A .txt scenario is the DESCRIPTION, so it needs no description_type
+pkg_path <- example_diagnose_scenario("description_examples/bad_description.txt",
+                                      show_content = FALSE)
+issues(diagnose_description_issues(pkg_path, verbose = FALSE))
+unlink(pkg_path, recursive = TRUE)
+
+# With cleanup = TRUE the package is deleted when the calling function returns
+count_tf <- function() {
+  pkg_path <- example_diagnose_scenario("code_examples/tf_usage_bad.R",
+                                        show_content = FALSE, cleanup = TRUE)
+  length(lab_tf_usage(pkg_path, verbose = FALSE)$issues)
+}
+count_tf()
 }
 \seealso{
-Used in examples for diagnostic functions like \code{\link[=diagnose_tf_usage]{diagnose_tf_usage()}},
-\code{\link[=diagnose_seed_setting]{diagnose_seed_setting()}}, etc.
+Used in examples for diagnostic functions like \code{\link[=lab_tf_usage]{lab_tf_usage()}},
+\code{\link[=lab_seed_setting]{lab_seed_setting()}}, etc.
 }

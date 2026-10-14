@@ -6,14 +6,20 @@
 #' @details
 #' This function checks:
 #'
-#' - Package size — measured against the files that would ship in the
+#' - Package size, measured against the files that would go into the
 #'   tarball (`.Rbuildignore` and standard scratch dirs are excluded), with
 #'   a 5 MB warning threshold matching CRAN's recommendation.
-#' - Invalid or problematic URLs in package files.
+#' - `http://` URLs and URL shorteners, offline. `R CMD check --as-cran` does
+#'   fetch every URL, but only with a network and only under `--as-cran`; this
+#'   is the fast local pass.
 #' - Presence of a `NEWS` file documenting user-facing changes.
 #' - Relative links in the `README` that would break on CRAN.
+#' - A package that exports code but has no examples, no tests and no
+#'   vignettes to exercise it.
+#' - An `inst/CITATION` that uses the old-style `citEntry()` or `personList()`,
+#'   or calls `packageDescription()`, `library()` or `require()`.
 #'
-#' [diagnose_cran_comments_file()] is intentionally not part of this default
+#' [lab_cran_comments_file()] is intentionally not part of this default
 #' run, since a `cran-comments.md` is a workflow convention rather than a CRAN
 #' requirement; call it directly to opt in.
 #'
@@ -31,24 +37,22 @@
 #' general_results <- diagnose_general_issues(pkg_path, verbose = FALSE)
 #' general_results$package_size$size_mb
 diagnose_general_issues <- function(path = ".", verbose = TRUE) {
-  if (verbose) {
-    cli::cli_h2("General Health Check")
-  }
-
-  run_checks(list(
-    package_size  = diagnose_package_size,
-    urls          = diagnose_urls,
-    news_file     = diagnose_news_file,
-    readme_links  = diagnose_readme_relative_links
-  ), path, verbose)
+  path <- find_package_root(path)
+  begin_category("general", path, verbose)
+  run_category("general", path, verbose)
 }
 
 #' Diagnose Package Size
 #'
-#' Estimates the size of the source package that would be shipped to CRAN
+#' Estimates the size of the source package that would be sent to CRAN
 #' (files matched by `.Rbuildignore`, plus standard scratch directories like
 #' `.git`, `.Rproj.user`, are excluded). Warns at the 5 MB threshold.
 #'
+#' @section Source:
+#' The [CRAN Repository Policy](https://cran.r-project.org/web/packages/policies.html)
+#' limits the size of the built tarball. See
+#' `vignette("check-sources", package = "checktor")` for how every check maps to its
+#' source.
 #' @param path Character. Path to package directory
 #' @param verbose Logical. Print diagnostic messages
 #'
@@ -56,24 +60,65 @@ diagnose_general_issues <- function(path = ".", verbose = TRUE) {
 #'   and `size_mb`.
 #' @export
 #' @examples
-#' pkg_path <- example_diagnose_scenario("code_examples/tf_usage_bad.R",
-#'                                       show_content = FALSE)
-#' diagnose_package_size(pkg_path, verbose = FALSE)$size_mb
-diagnose_package_size <- function(path, verbose = TRUE) {
-  all_files <- list.files(path, recursive = TRUE, full.names = FALSE,
-                          all.files = TRUE, no.. = TRUE)
+#' pkg <- example_diagnose_scenario("code_examples/tf_usage_bad.R",
+#'                                  show_content = FALSE)
+#' # About 7 MB of data that gzip cannot shrink much
+#' dir.create(file.path(pkg, "inst", "extdata"), recursive = TRUE)
+#' writeBin(sin(seq_len(1e6) * 1.1), file.path(pkg, "inst", "extdata", "series.bin"))
+#' lab_package_size(pkg, verbose = FALSE)$issues
+#' unlink(pkg, recursive = TRUE)
+lab_package_size <- function(path = ".", verbose = TRUE) {
+  path <- find_package_root(path)
+  all_files <- list.files(
+    path,
+    recursive = TRUE,
+    full.names = FALSE,
+    all.files = TRUE,
+    no.. = TRUE
+  )
   ignore <- build_ignore_matcher(path)
   keep <- !ignore(all_files)
   all_files <- all_files[keep]
 
   full <- file.path(path, all_files)
-  info <- file.info(full)
-  size_mb <- sum(info$size, na.rm = TRUE) / (1024^2)
+
+  # CRAN's 5 MB limit is on the GZIPPED TARBALL, not the source tree. Summing raw
+  # bytes over-reports any package whose bulk is compressible text -- built vignette
+  # HTML, minified JS, SVG, CSV -- by two or three times. Measured against the real
+  # tarballs CRAN ships: billboarder is 6.3 MB on disk and 2.93 MB as a tarball,
+  # readepi 5.9 MB and 1.57 MB. Every package_size finding in the audit was a false
+  # positive produced by this one mistake.
+  #
+  # Compressing each file independently still misses the cross-file redundancy that
+  # a real tar.gz exploits, so this remains a slight OVER-estimate. That is the safe
+  # direction for a limit check, and it is far closer than the raw sum.
+  compressed_size <- function(f) {
+    n <- file.size(f)
+    if (is.na(n) || n == 0) {
+      return(0)
+    }
+    # A file R cannot open counts at its size on disk, without a warning.
+    raw_bytes <- tryCatch(
+      suppressWarnings(readBin(f, what = "raw", n = n)),
+      error = function(e) NULL
+    )
+    if (is.null(raw_bytes)) {
+      return(n)
+    }
+    length(memCompress(raw_bytes, type = "gzip"))
+  }
+  size_mb <- sum(vapply(full, compressed_size, numeric(1))) / (1024^2)
 
   passed <- size_mb <= 5
-  issues <- if (passed) character(0) else paste0(
-    "Package size ", round(size_mb, 2), " MB exceeds 5 MB"
-  )
+  issues <- if (passed) {
+    character(0)
+  } else {
+    paste0(
+      "Package size ",
+      round(size_mb, 2),
+      " MB (compressed) exceeds 5 MB"
+    )
+  }
 
   if (verbose) {
     if (passed) {
@@ -85,86 +130,16 @@ diagnose_package_size <- function(path, verbose = TRUE) {
         "Package size: {.val {round(size_mb, 2)} MB} (over 5 MB recommended limit)"
       )
       cli::cli_text(
-        "{.emph Treatment: Reduce package size or document in cran-comments.md}"
+        paste0("{.emph Treatment: ", treatments$package_size$treatment, "}")
       )
     }
   }
-  checktor_check_result(passed, issues, "Package size check", size_mb = size_mb)
-}
-
-#' Diagnose URL Issues in Package Files
-#'
-#' Checks common package files for `http://` URLs (should usually be
-#' `https://`) and known URL shortener domains.
-#'
-#' @param path Character. Path to package directory
-#' @param verbose Logical. Print diagnostic messages
-#'
-#' @return [checktor_check_result()] with `passed`, `issues`, `message`.
-#' @export
-#' @examples
-#' pkg_path <- example_diagnose_scenario("description_examples/bad_description.txt",
-#'                                       show_content = FALSE)
-#' issues(diagnose_urls(pkg_path, verbose = FALSE))
-diagnose_urls <- function(path, verbose = TRUE) {
-  rd_files <- list.files(file.path(path, "man"),
-                         pattern = "\\.Rd$", full.names = TRUE)
-  vignette_files <- list.files(file.path(path, "vignettes"),
-                               pattern = "\\.(Rmd|qmd|md)$", full.names = TRUE)
-  text_files <- c(
-    file.path(path, "DESCRIPTION"),
-    file.path(path, "README.md"),
-    file.path(path, "README.Rmd"),
-    vignette_files
+  checktor_check_result(
+    passed,
+    issues,
+    check_label("package_size"),
+    size_mb = size_mb
   )
-  text_files <- text_files[file.exists(text_files)]
-
-  if (length(text_files) == 0L && length(rd_files) == 0L) {
-    return(checktor_check_result(TRUE, character(0), "URLs check"))
-  }
-
-  http_re      <- "http://(?!localhost|127\\.0\\.0\\.1|0\\.0\\.0\\.0)"
-  shortener_re <- "\\b(bit\\.ly|tinyurl\\.com|goo\\.gl|t\\.co|ow\\.ly)\\b"
-
-  issues <- character(0)
-  for (file in text_files) {
-    content <- safe_read_lines(file)
-    if (length(content) == 0L) next
-    if (any(grepl(http_re, content, perl = TRUE))) {
-      issues <- c(issues,
-                  paste0(basename(file), ": http:// URL (should be https://)"))
-    }
-    if (any(grepl(shortener_re, content, perl = TRUE))) {
-      issues <- c(issues,
-                  paste0(basename(file), ": URL shortener (may redirect)"))
-    }
-  }
-
-  # Rd files: parse and collect prose text so URLs in macros/sections are
-  # caught but Rd markup itself isn't matched.
-  for (file in rd_files) {
-    rd <- tryCatch(tools::parse_Rd(file), error = function(e) NULL)
-    if (is.null(rd)) next
-    text <- collect_rd_text(rd)
-    if (!nzchar(text)) next
-    if (grepl(http_re, text, perl = TRUE)) {
-      issues <- c(issues,
-                  paste0(basename(file), ": http:// URL (should be https://)"))
-    }
-    if (grepl(shortener_re, text, perl = TRUE)) {
-      issues <- c(issues,
-                  paste0(basename(file), ": URL shortener (may redirect)"))
-    }
-  }
-
-  passed <- length(issues) == 0L
-  emit_issue_summary(
-    issues, verbose,
-    "No obvious URL issues found",
-    "Potential URL issues",
-    level = "warning"
-  )
-  checktor_check_result(passed, issues, "URLs check")
 }
 
 #' Diagnose a Missing NEWS File
@@ -173,33 +148,162 @@ diagnose_urls <- function(path, verbose = TRUE) {
 #' changes in a `NEWS` file. Accepts `NEWS.md`, `NEWS`, or `NEWS.Rd` at the
 #' package root or under `inst/`.
 #'
+#' @section Source:
+#' No formal rule. A `NEWS` file is expected but not required, a convention
+#' which is why this sits at `opinion` tier. See
+#' `vignette("check-sources", package = "checktor")` for how every check maps to its
+#' source.
 #' @param path Character. Path to package directory
 #' @param verbose Logical. Print diagnostic messages
 #'
 #' @return [checktor_check_result()] with `passed`, `issues`, `message`.
 #' @export
 #' @examples
-#' pkg_path <- example_diagnose_scenario("code_examples/tf_usage_bad.R",
-#'                                       show_content = FALSE)
-#' file.remove(file.path(pkg_path, "NEWS.md"))   # demonstrate the failing case
-#' issues(diagnose_news_file(pkg_path, verbose = FALSE))
-diagnose_news_file <- function(path, verbose = TRUE) {
+#' pkg <- example_diagnose_scenario("code_examples/tf_usage_bad.R",
+#'                                  show_content = FALSE)
+#' invisible(file.remove(file.path(pkg, "NEWS.md")))
+#' lab_news_file(pkg, verbose = FALSE)$issues
+#' unlink(pkg, recursive = TRUE)
+lab_news_file <- function(path = ".", verbose = TRUE) {
+  path <- find_package_root(path)
   candidates <- file.path(
     path,
-    c("NEWS.md", "NEWS", "NEWS.Rd",
-      file.path("inst", c("NEWS.md", "NEWS", "NEWS.Rd")))
+    c(
+      "NEWS.md",
+      "NEWS",
+      "NEWS.Rd",
+      file.path("inst", c("NEWS.md", "NEWS", "NEWS.Rd"))
+    )
   )
   has_news <- any(file.exists(candidates))
-  issues <- if (has_news) character(0) else
+  issues <- if (has_news) {
+    character(0)
+  } else {
     "No NEWS file found (add NEWS.md to document user-facing changes)"
-  emit_issue_summary(
-    issues, verbose,
+  }
+  report_check(
+    issues,
+    verbose,
+    check_label("news_file"),
     "NEWS file found",
     "No NEWS file found",
-    "Treatment: Add a NEWS.md documenting changes per version (usethis::use_news_md())",
+    treatment = paste("Treatment:", treatments$news_file$treatment),
     level = "warning"
   )
-  checktor_check_result(has_news, issues, "NEWS file check")
+}
+
+#' Diagnose a Package Nothing Exercises
+#'
+#' Flags a package that exports something but ships no `\examples` in any help
+#' page, no tests and no vignettes, so a check runs none of its code. CRAN's
+#' incoming check raises this as a WARNING, which is an automatic rejection.
+#'
+#' The conditions are R's own. An example counts even when all of it sits in
+#' `\dontrun{}`, because R still writes it out. A test counts only as a file
+#' directly in `tests/` ending in `.R`, `.r` or `.Rin`, since that is what
+#' `R CMD check` runs: a `tests/testthat/` folder without the `tests/testthat.R`
+#' driver is never run, and the finding says so. Files `.Rbuildignore` excludes do
+#' not count, since they are not in the tarball. A package with no `R/`
+#' directory, or whose `NAMESPACE` exports nothing, passes. So does one whose
+#' `NAMESPACE` is missing or cannot be parsed, since its exports are then unknown.
+#'
+#' @section Source:
+#' The [CRAN incoming check](https://cran.r-project.org/doc/manuals/r-release/R-exts.html#Checking-packages)
+#' (`R CMD check --as-cran`) reports "checking for code which exercises the
+#' package ... WARNING" with "No examples, no tests, no vignettes" when all three
+#' are missing and the `NAMESPACE` exports anything. `devtools::check()` turns the
+#' incoming check off by default, so the WARNING is usually first seen at
+#' win-builder or on submission. The
+#' [CRAN Repository Policy](https://cran.r-project.org/web/packages/policies.html)
+#' asks that "the checks that are left do exercise all the features of the
+#' package". See `vignette("check-sources", package = "checktor")` for how every
+#' check maps to its source.
+#' @param path Character. Path to package directory
+#' @param verbose Logical. Print diagnostic messages
+#'
+#' @return [checktor_check_result()] with `passed`, `issues`, `message`.
+#' @export
+#' @examples
+#' pkg <- example_diagnose_scenario("general_examples/code_exercised_bad.R",
+#'                                  show_content = FALSE)
+#' # The scenario's function is exported, as roxygen2 would record it
+#' writeLines("export(tidy_values)", file.path(pkg, "NAMESPACE"))
+#' lab_code_exercised(pkg, verbose = FALSE)$issues
+#' unlink(pkg, recursive = TRUE)
+lab_code_exercised <- function(path = ".", verbose = TRUE) {
+  path <- find_package_root(path)
+  # R asks only of a package with code in R/ that exports something. With no
+  # readable NAMESPACE the exports are unknown, so there is nothing to judge.
+  if (!dir.exists(file.path(path, "R"))) {
+    return(pass_result(check_label("code_exercised")))
+  }
+  ex <- package_exports(path)
+  if (is.null(ex) || (length(ex$names) == 0L && length(ex$patterns) == 0L)) {
+    return(pass_result(check_label("code_exercised")))
+  }
+
+  if (package_has_examples(path)) {
+    return(pass_result(check_label("code_exercised")))
+  }
+  # R CMD check runs the scripts directly in tests/, nothing deeper.
+  if (length(list_included_files(path, "tests", "\\.(r|R|Rin)$")) > 0L) {
+    return(pass_result(check_label("code_exercised")))
+  }
+  if (package_has_vignettes(path)) {
+    return(pass_result(check_label("code_exercised")))
+  }
+
+  issue <- paste(
+    "The package exports code but has no examples, no tests and no vignettes,",
+    "so R CMD check --as-cran WARNs 'No examples, no tests, no vignettes'"
+  )
+  nested <- list_included_files(path, "tests", "\\.[rR]$", recursive = TRUE)
+  if (length(nested) > 0L) {
+    issue <- paste0(
+      issue,
+      ". The files under tests/ are never run without a driver such as ",
+      "tests/testthat.R (usethis::use_testthat())"
+    )
+  }
+
+  report_check(
+    issue,
+    verbose,
+    check_label("code_exercised"),
+    "The package has examples, tests or vignettes",
+    "Nothing exercises the package's code",
+    treatment = paste("Treatment:", treatments$code_exercised$treatment),
+    level = "warning"
+  )
+}
+
+# Does any help page the tarball includes carry an \examples section? R writes
+# one out whatever it holds, \dontrun{} included, so its presence is what counts.
+# A page that does not parse counts as having one: the check must not accuse a
+# package on the strength of a file it could not read.
+package_has_examples <- function(path) {
+  for (file in list_rd_files(path)) {
+    rd <- suppressWarnings(read_rd_quietly(file))
+    if (is.null(rd) || !is.null(extract_rd_section(rd, "\\examples"))) {
+      return(TRUE)
+    }
+  }
+  FALSE
+}
+
+# Vignette sources in the tarball, for any of the engines CRAN packages use:
+# Sweave, knitr, Quarto and R.rsp. R looks in vignettes/, or in inst/doc for an
+# old package without one.
+VIGNETTE_SOURCE_PATTERN <-
+  "\\.([RrSs](nw|tex|md|markdown|rst|html|asciidoc)|qmd|rsp|asis)$"
+
+package_has_vignettes <- function(path) {
+  subdir <- if (dir.exists(file.path(path, "vignettes"))) {
+    "vignettes"
+  } else {
+    file.path("inst", "doc")
+  }
+  length(list_included_files(path, subdir, VIGNETTE_SOURCE_PATTERN)) > 0L
 }
 
 #' Diagnose a Missing cran-comments.md File
@@ -212,111 +316,38 @@ diagnose_news_file <- function(path, verbose = TRUE) {
 #' [diagnose_general_issues()] run, because a `cran-comments.md` is a workflow
 #' convention rather than a CRAN requirement. Call it directly to use it.
 #'
+#' @section Source:
+#' No formal rule. A `cran-comments.md` is a submission-workflow convention
+#' rather than a CRAN requirement, which is why this check is opt-in and not
+#' part of a default run. See
+#' `vignette("check-sources", package = "checktor")` for how every check maps to its
+#' source.
 #' @param path Character. Path to package directory
 #' @param verbose Logical. Print diagnostic messages
 #'
 #' @return [checktor_check_result()] with `passed`, `issues`, `message`.
 #' @export
 #' @examples
-#' pkg_path <- example_diagnose_scenario("code_examples/tf_usage_bad.R",
-#'                                       show_content = FALSE)
-#' file.remove(file.path(pkg_path, "cran-comments.md"))  # failing case
-#' issues(diagnose_cran_comments_file(pkg_path, verbose = FALSE))
-diagnose_cran_comments_file <- function(path, verbose = TRUE) {
+#' pkg <- example_diagnose_scenario("code_examples/tf_usage_bad.R",
+#'                                  show_content = FALSE)
+#' invisible(file.remove(file.path(pkg, "cran-comments.md")))
+#' lab_cran_comments_file(pkg, verbose = FALSE)$issues
+#' unlink(pkg, recursive = TRUE)
+lab_cran_comments_file <- function(path = ".", verbose = TRUE) {
+  path <- find_package_root(path)
   has_it <- file.exists(file.path(path, "cran-comments.md"))
-  issues <- if (has_it) character(0) else
+  issues <- if (has_it) {
+    character(0)
+  } else {
     "No cran-comments.md file with submission notes"
-  emit_issue_summary(
-    issues, verbose,
+  }
+  report_check(
+    issues,
+    verbose,
+    check_label("cran_comments_file"),
     "cran-comments.md found",
     "No cran-comments.md found",
-    "Treatment: Add cran-comments.md with submission notes (usethis::use_cran_comments())",
+    treatment = paste("Treatment:", treatments$cran_comments_file$treatment),
     level = "warning"
   )
-  checktor_check_result(has_it, issues, "cran-comments file check")
-}
-
-# Pull link/image targets out of README text. Handles markdown `](target)`
-# and `<a href=...>` / `<img src=...>` HTML attributes. Returns raw targets.
-extract_link_targets <- function(text) {
-  md <- regmatches(text, gregexpr("\\]\\([^)]+\\)", text, perl = TRUE))[[1L]]
-  md <- sub("^\\]\\(", "", md)
-  md <- sub("\\)$", "", md)
-  md <- sub("\\s+[\"'].*$", "", md)          # strip optional link title
-  html <- regmatches(
-    text,
-    gregexpr("(?:href|src)\\s*=\\s*[\"'][^\"']+[\"']", text, perl = TRUE)
-  )[[1L]]
-  html <- sub(".*[\"']([^\"']+)[\"']$", "\\1", html)
-  trimws(c(md, html))
-}
-
-# TRUE for targets that are NOT package-relative file links: absolute URLs
-# (any scheme), protocol-relative `//host`, in-page anchors `#sec`, or empty.
-is_external_or_anchor <- function(tgt) {
-  tgt <- trimws(tgt)
-  !nzchar(tgt) ||
-    grepl("^[A-Za-z][A-Za-z0-9+.-]*:", tgt) ||
-    grepl("^//", tgt) ||
-    grepl("^#", tgt)
-}
-
-#' Diagnose Relative Links in the README
-#'
-#' Relative links in `README.md`/`README.Rmd` render on GitHub but break on
-#' CRAN when the target is not shipped in the built tarball. This flags
-#' relative links whose target is missing on disk or excluded by
-#' `.Rbuildignore` (and therefore absent after `R CMD build`). Relative links
-#' to files that do ship (e.g. `man/figures/logo.png`) are not flagged.
-#'
-#' @param path Character. Path to package directory
-#' @param verbose Logical. Print diagnostic messages
-#'
-#' @return [checktor_check_result()] with `passed`, `issues`, `message`.
-#' @export
-#' @examples
-#' pkg_path <- example_diagnose_scenario("code_examples/tf_usage_bad.R",
-#'                                       show_content = FALSE)
-#' writeLines("See [the guide](docs/guide.md) for details.",
-#'            file.path(pkg_path, "README.md"))
-#' issues(diagnose_readme_relative_links(pkg_path, verbose = FALSE))
-diagnose_readme_relative_links <- function(path, verbose = TRUE) {
-  readmes <- file.path(path, c("README.md", "README.Rmd"))
-  readmes <- readmes[file.exists(readmes)]
-  if (length(readmes) == 0L) {
-    return(checktor_check_result(TRUE, character(0),
-                                 "README relative-links check"))
-  }
-
-  ignore <- build_ignore_matcher(path)
-  issues <- character(0)
-  for (file in readmes) {
-    content <- safe_read_lines(file)
-    if (length(content) == 0L) next
-    text <- paste(content, collapse = "\n")
-    for (tgt in extract_link_targets(text)) {
-      if (is_external_or_anchor(tgt)) next
-      rel <- trimws(sub("[#?].*$", "", tgt))   # drop fragment/query
-      if (!nzchar(rel)) next
-      local <- file.path(path, rel)
-      if (!file.exists(local) && !dir.exists(local)) {
-        issues <- c(issues, paste0(basename(file),
-                                   ": relative link to missing file '", rel, "'"))
-      } else if (isTRUE(ignore(rel))) {
-        issues <- c(issues, paste0(basename(file),
-                                   ": relative link to .Rbuildignore'd file '",
-                                   rel, "' (won't ship to CRAN)"))
-      }
-    }
-  }
-
-  passed <- length(issues) == 0L
-  emit_issue_summary(
-    issues, verbose,
-    "README relative links resolve to shipped files",
-    "README has relative links that may break on CRAN",
-    "Treatment: Use full URLs, or ensure the target ships (not in .Rbuildignore)",
-    level = "warning"
-  )
-  checktor_check_result(passed, issues, "README relative-links check")
 }

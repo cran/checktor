@@ -16,13 +16,27 @@ knitr:
 library(checktor)
 ```
 
+<style>
+.ct-fig{display:block;margin:1.5rem auto;max-width:100%;height:auto}
+.ct-dark{display:none}
+@media (prefers-color-scheme:dark){.ct-light{display:none}.ct-dark{display:block}}
+[data-bs-theme=light] .ct-light{display:block}
+[data-bs-theme=light] .ct-dark{display:none}
+[data-bs-theme=dark] .ct-light{display:none}
+[data-bs-theme=dark] .ct-dark{display:block}
+</style>
+
 ## The gap checktor fills
 
-`R CMD check` answers one question well: does this package build and run? It is
-silent on the question that actually decides your submission: will a CRAN
+`R CMD check` answers one question well, whether this package builds and runs.
+The question that actually decides your submission goes unasked. Will a CRAN
 volunteer, reading by hand, send it back? Those are different questions, and the
-space between them is where afternoons disappear. A title that isn't in title
-case. A missing `\value{}` tag. A stray `T` where you meant `TRUE`.
+space between them is where afternoons disappear. A missing `\value{}` tag. A
+`set.seed()` left inside a function. A Description that never grew past one
+line. Nothing in the standard toolchain says a word about any of them.
+
+![Seven failure modes against the three tools that might catch them. `R CMD check` alone catches undocumented arguments. `lintr` alone catches a line over 80 characters, which checktor does not check. `lintr` and checktor both catch a bare `T` in package code, and `R CMD check` and checktor both flag a Title that is not in title case. The last three rows, a `set.seed()` left in a function, a one-line Description, and a missing `\value{}` tag, are caught only by checktor.](figures/coverage-light.svg){.ct-fig .ct-light}
+![](figures/coverage-dark.svg){.ct-fig .ct-dark aria-hidden="true"}
 
 `checktor` is the specialist your build refers you to before that appointment.
 It runs the extra-CRAN checks that live in the Repository Policy and reviewers'
@@ -31,8 +45,14 @@ gives you a checkup, a diagnosis, and a prescription.
 
 ## Installation
 
-`checktor` lives on GitHub for now; once it reaches CRAN you will be able to
-`install.packages("checktor")`. Until then, install the development version:
+`checktor` is on CRAN, so you can install it the usual way.
+
+```{r eval=FALSE}
+install.packages("checktor")
+```
+
+If you want the cutting-edge development version, with the latest changes before
+they reach CRAN, install it from GitHub.
 
 ```{r eval=FALSE}
 # install.packages("pak")
@@ -41,23 +61,55 @@ pak::pak("coatless-rpkg/checktor")
 
 ## A first checkup
 
+Load the package first.
+
+```{r}
+library(checktor)
+```
+
+That brings `checktor()` and its helpers into your session, so from here
+everything is a single function call, and the natural place to begin is a
+checkup.
+
 `checktor()` examines a package directory. So we can watch it work without
 maiming your own package, we will point it at a throwaway package built around
-one deliberately bad file:
+one deliberately bad file.
 
 ```{r}
 pkg <- example_diagnose_scenario("code_examples/tf_usage_bad.R",
                                  show_content = FALSE)
+```
 
+Here is the file it was built around, bad habits and all.
+
+```{r}
+#| label: show-bad-file
+#| echo: false
+#| results: asis
+src <- readLines(file.path(pkg, "R", "tf_usage_bad.R"))
+cat("```r\n", paste(src, collapse = "\n"), "\n```\n", sep = "")
+```
+
+> Left to itself, `example_diagnose_scenario()` prints that file for you, because
+> `show_content` defaults to `TRUE`. We pass `FALSE` and render it above instead,
+> so it arrives as highlighted R rather than console output.
+
+Now the checkup itself.
+
+```{r}
+# verbose and progress are off here, which keeps the printout compact
 results <- checktor(pkg, verbose = FALSE, progress = FALSE)
 results
 ```
 
-That is the bedside summary: which of the five categories (code, DESCRIPTION,
-documentation, general, and CRAN policy) need attention, and an overall verdict.
-On your own package the call is just `checktor()`. For the full catalogue of
-what each category checks, see the
+That bedside summary names which of the five categories (code, DESCRIPTION,
+documentation, general, and CRAN policy) need attention, and gives an overall
+verdict. For the full catalogue of what each category checks, see the
 [function reference](https://r-pkg.thecoatlessprofessor.com/checktor/reference/index.html).
+
+> **On your own package**, the call is simply `checktor()`. It works from anywhere
+> inside the package, so calling it with your working directory in `R/` or
+> `tests/testthat/` still examines the whole package.
 
 ## Reading the results as data
 
@@ -65,6 +117,9 @@ The printed report is for humans. When you want to *compute* on the findings,
 filter them, count them, fold them into a report of your own, reach for the
 accessors. They return plain data frames, so you never spelunk through nested
 lists.
+
+![The one `checktor_results` object fans out into three plain data frames. `summary()` gives 5 rows, one per category, counting the checks that passed, failed and were skipped. `issues()` gives 7 rows, one per issue, carrying its severity, file and line. `tidy()` gives 57 rows, one per check, with its severity and whether it passed or was skipped.](figures/result-shapes-light.svg){.ct-fig .ct-light}
+![](figures/result-shapes-dark.svg){.ct-fig .ct-dark aria-hidden="true"}
 
 ```{r}
 summary(results)   # one row per category
@@ -75,7 +130,11 @@ issues(results)    # one row per issue, with file and line
 ```
 
 `tidy(results)` gives one row per check, passed or not, and `as.data.frame()` is
-its alias. Three predicates answer the yes/no questions directly:
+its alias. Its `skipped` column marks any check that did not run, such as the URL
+fetch when you are not at the console, so a check that sat out never reads as one
+that passed. `summary()` counts such a check under `skipped`, so `passed`,
+`failed` and `skipped` add up to `checks`. Three helpers answer the common
+questions directly:
 
 ```{r}
 is_healthy(results)
@@ -83,8 +142,10 @@ n_issues(results)
 failed_checks(results)
 ```
 
-Each accessor also works on a single category, as in `issues(results$code_issues)`,
-or on a single check.
+`is_healthy()` and `n_issues()` follow the verdict, counting only the policy and
+robustness tiers, while `issues()` and `failed_checks()` list every tier, opinion
+included. Each accessor also works on a single category, as in
+`issues(results$code_issues)`, or on a single check.
 
 ## The one-line gate
 
@@ -95,16 +156,16 @@ diagnosis to a single verdict, `TRUE` when the package is clean:
 checkup(pkg)
 ```
 
-It is built to be the last word in a shell one-liner; the
-[checktor in Continuous Integration](checktor-in-ci.html) vignette puts it in
-charge of a GitHub Actions build.
+Built to be the last word in a shell one-liner, it takes charge of a GitHub
+Actions build in the
+[checktor in Continuous Integration](checktor-in-ci.html) vignette.
 
 ## From diagnosis to treatment
 
 A diagnosis you cannot act on is just bad news. `prescribe()` turns each finding
-into a concrete remedy:
+into a concrete remedy, with the before and after spelled out.
 
-```{r eval=FALSE}
+```{r}
 prescribe(results)
 ```
 
@@ -124,10 +185,24 @@ would rather not hear about the others:
 ```{r eval=FALSE}
 diagnose_code_issues()           # just the R sources
 diagnose_description_issues()    # just DESCRIPTION
-diagnose_documentation_issues()  # just the .Rd files
-diagnose_general_issues()        # size, URLs
+diagnose_documentation_issues()  # help pages, examples, vignettes, demos
+diagnose_general_issues()        # size, URLs, NEWS, README links
 diagnose_policy_violations()     # CRAN policy
 ```
+
+## Checking only what is included
+
+`R CMD build` drops whatever `.Rbuildignore` matches, and checktor drops the same
+files. A help topic or vignette held back from the tarball is never checked.
+
+The [devtag](https://github.com/moodymudskipper/devtag) package uses this to
+document unexported functions: `@dev` writes the help page and adds the `.Rd` to
+`.Rbuildignore`, so contributors see it and users do not. Those examples can call
+`:::` and checktor will not object. The pkgdown-only articles
+`usethis::use_article()` writes to `vignettes/articles/` work the same way.
+
+`roxygen_usage` is the exception. It reads all of `man/`, since it asks whether
+your working tree is in sync with roxygen rather than what is included.
 
 ## Turning down the volume
 
@@ -141,6 +216,39 @@ configure_doctor(verbose_default = FALSE, progress_default = FALSE)
 results <- checktor(verbose = FALSE, progress = FALSE)
 ```
 
+## Checks you ask for, and checks you turn off
+
+A few checks never join a run, because no authority backs them or they ask about
+your submission workflow rather than the package itself. They are not skipped,
+since nothing tried to run them. A quiet run does not mention them, but the results
+name them:
+
+```{r}
+results$metadata$on_request_checks
+```
+
+Each one is a `lab_*()` function like any other check, so running it is one call:
+
+```{r}
+lab_cran_comments_file(pkg, verbose = FALSE)
+```
+
+Going the other way, a check you have decided against can be turned off. For one
+package, name it in that package's `DESCRIPTION`:
+
+```
+Config/checktor/disable: news_file
+```
+
+For every package, set the option once, for example in `.Rprofile`:
+
+```{r eval=FALSE}
+options(checktor.disable = "news_file")
+```
+
+A disabled check does not run and is not counted anywhere. That is the difference
+from a skipped check, which was meant to run and could not.
+
 ## Where it fits
 
 Run `checktor` in the gap between writing code and `R CMD check`:
@@ -150,7 +258,7 @@ devtools::document()
 devtools::test()
 
 results <- checktor()  # the extra-CRAN checkup
-prescribe(results)     # apply the remedies
+prescribe(results)     # read the remedies
 
 devtools::check()      # the standard checks
 ```
@@ -160,13 +268,17 @@ devtools::check()      # the standard checks
 `checktor` is a checkup, not a cure-all. It complements `R CMD check` and
 [`lintr`](https://lintr.r-lib.org) rather than replacing either, and it cannot
 replace your judgment about whether a package is worth submitting. What it does
-do is the one thing those tools do not: it remembers the hand-enforced CRAN
-rules so you do not have to. Run the three together, treat the printed report as
+do is the one thing those tools do not, remembering the hand-enforced CRAN rules
+so you do not have to. Run the three together, treat the printed report as
 the conversation and the accessors as the data, and a reviewer should find
 nothing left to say. That is the entire point.
 
 ## See also
 
+- [Where the Checks Come From](check-sources.html): the source and severity tier
+  behind every check, from CRAN policy to convention.
+- [What R CMD check Checks](r-cmd-check.html): every step `R CMD check` takes,
+  so you can see where checktor begins.
 - [checktor in Continuous Integration](checktor-in-ci.html): put `checkup()` in
   charge of a GitHub Actions build as a quality gate.
 - [Writing Your Own Checks](writing-checks.html): add project-specific checks

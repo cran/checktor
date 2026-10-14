@@ -11,20 +11,30 @@
 #'   in the console. Default: `TRUE`.
 #' @param description_type Character. Type of DESCRIPTION file to create.
 #'   Options: "minimal" (basic fields only), "bad" (with known issues),
-#'   "good" (properly formatted). Default: "minimal".
-#' @param cleanup Logical. Whether to register cleanup of temporary directory
-#'   on exit. Default: `FALSE` (user manages cleanup).
+#'   "good" (properly formatted). Default: "minimal". Ignored when
+#'   `example_path` is a `.txt` scenario, which becomes the `DESCRIPTION` itself.
+#' @param cleanup Logical. Whether to delete the temporary package when the
+#'   function that called `example_diagnose_scenario()` returns. Called at top
+#'   level there is no such function, so the package stays until R removes the
+#'   session's temporary directory. Default: `FALSE` (you manage cleanup).
 #'
 #' @return
 #' Character. Path to the temporary package directory containing the example
-#' file. Returns `NULL` if the example file cannot be found.
+#' file. Returns `NULL`, with a warning, if the example file cannot be found. An
+#' `example_path` that is not an `.R`, `.Rd`, `.Rmd`, `.qmd`, `.Rnw`, `.txt`,
+#' `.CITATION` or `.LICENSE` file is an error, since a package has no place for
+#' it.
 #'
 #' @details
 #' This function:
 #'
 #' 1. Locates the specified example file in the package's `inst/diagnose/` directory
 #' 2. Creates a temporary package directory structure
-#' 3. Copies the example file to the appropriate location
+#' 3. Copies the example file to where a package keeps its kind: an `.R` file in
+#'    `R/`, an `.Rd` file in `man/`, a vignette (`.Rmd`, `.qmd`, `.Rnw`) in
+#'    `vignettes/`, a DESCRIPTION scenario (`.txt`) as the `DESCRIPTION`, a
+#'    citation scenario (`.CITATION`) as `inst/CITATION`, and a licence scenario
+#'    (`.LICENSE`) as `LICENSE`
 #' 4. Optionally displays the example file content
 #' 5. Returns the path to the temporary package for diagnostic testing
 #'
@@ -33,66 +43,90 @@
 #'
 #' @section Example File Structure:
 #'
-#' The temporary package created has this structure:
+#' The temporary package created has this structure. The example file goes in
+#' the one place its extension names, and the other directories stay empty:
 #'
 #' ```
-#' /tmp/checktor_example_XXXX/
-#' |-- DESCRIPTION          # Basic or custom DESCRIPTION file
-#' |-- R/                   # Contains copied example R files
-#' |   `-- example.R        # The example file with issues
-#' |-- man/                 # Empty directory for .Rd files
-#' `-- tests/               # Empty directory for test files
+#' <tempdir>/checktor_example_XXXX/
+#' |-- DESCRIPTION          # The template, or a .txt scenario itself
+#' |-- LICENSE              # A .LICENSE scenario; made only for one
+#' |-- NEWS.md              # So the NEWS check has nothing to report
+#' |-- cran-comments.md     # So the cran-comments check has nothing to report
+#' |-- R/                   # An .R scenario, such as tf_usage_bad.R
+#' |-- man/                 # An .Rd scenario, such as missing_value_tag.Rd
+#' |-- inst/CITATION        # A .CITATION scenario; made only for one
+#' |-- tests/               # Always empty
+#' `-- vignettes/           # An .Rmd, .qmd or .Rnw scenario; made only for one
 #' ```
 #'
 #' @seealso
-#' Used in examples for diagnostic functions like [diagnose_tf_usage()],
-#' [diagnose_seed_setting()], etc.
+#' Used in examples for diagnostic functions like [lab_tf_usage()],
+#' [lab_seed_setting()], etc.
 #'
 #' @export
 #' @examples
-#' # Create scenario with T/F usage issues
+#' # A scenario with T/F usage issues. show_content defaults to TRUE, so the
+#' # offending file prints first
 #' pkg_path <- example_diagnose_scenario("code_examples/tf_usage_bad.R")
-#' result <- diagnose_tf_usage(pkg_path, verbose = TRUE)
+#' lab_tf_usage(pkg_path, verbose = FALSE)$issues
 #' issues(checktor(pkg_path, verbose = FALSE, progress = FALSE))
-#'
-#' # Create scenario without showing file content
-#' pkg_path <- example_diagnose_scenario("code_examples/seed_setting_bad.R",
-#'                                       show_content = FALSE)
-#'
-#' # Create scenario with problematic DESCRIPTION file
-#' pkg_path <- example_diagnose_scenario("description_examples/bad_description.txt",
-#'                                       description_type = "bad")
-#' desc_result <- diagnose_description_issues(pkg_path)
-#'
-#' # Manual cleanup when done
 #' unlink(pkg_path, recursive = TRUE)
 #'
-#' # Or use with automatic cleanup
-#' pkg_path <- example_diagnose_scenario("code_examples/browser_calls_bad.R",
-#'                                       cleanup = TRUE)
-#' # Cleanup happens automatically when R session ends
-example_diagnose_scenario <- function(example_path,
-                                      show_content = TRUE,
-                                      description_type = "minimal",
-                                      cleanup = FALSE) {
-
+#' # A .txt scenario is the DESCRIPTION, so it needs no description_type
+#' pkg_path <- example_diagnose_scenario("description_examples/bad_description.txt",
+#'                                       show_content = FALSE)
+#' issues(diagnose_description_issues(pkg_path, verbose = FALSE))
+#' unlink(pkg_path, recursive = TRUE)
+#'
+#' # With cleanup = TRUE the package is deleted when the calling function returns
+#' count_tf <- function() {
+#'   pkg_path <- example_diagnose_scenario("code_examples/tf_usage_bad.R",
+#'                                         show_content = FALSE, cleanup = TRUE)
+#'   length(lab_tf_usage(pkg_path, verbose = FALSE)$issues)
+#' }
+#' count_tf()
+example_diagnose_scenario <- function(
+  example_path,
+  show_content = TRUE,
+  description_type = "minimal",
+  cleanup = FALSE
+) {
   # Validate input
-  if (missing(example_path) || !is.character(example_path) || length(example_path) != 1) {
-    stop("example_path must be a single character string")
+  if (
+    missing(example_path) ||
+      !is.character(example_path) ||
+      length(example_path) != 1
+  ) {
+    cli::cli_abort("{.arg example_path} must be a single character string.")
+  }
+
+  # A file no package keeps has nowhere to go, whether or not it ships.
+  target <- scenario_target(example_path)
+  if (is.na(target)) {
+    cli::cli_abort(c(
+      paste(
+        "{.arg example_path} must be an {.file .R}, {.file .Rd}, vignette",
+        "({.file .Rmd}, {.file .qmd}, {.file .Rnw}), DESCRIPTION ({.file .txt}),",
+        "CITATION ({.file .CITATION}) or LICENSE ({.file .LICENSE}) scenario."
+      ),
+      "x" = "{.file {example_path}} is none of these."
+    ))
   }
 
   # Find the example file
   example_file <- system.file("diagnose", example_path, package = "checktor")
 
   if (!file.exists(example_file)) {
-    warning("Example file not found: ", example_path)
+    cli::cli_warn("Example file not found: {example_path}")
     return(NULL)
   }
 
-  # Create temporary package directory
-  temp_pkg <- file.path(tempdir(), paste0("checktor_example_",
-                                          format(Sys.time(), "%Y%m%d_%H%M%S_"),
-                                          sample(1000:9999, 1)))
+  # Create temporary package directory. tempfile() names it without touching R's
+  # random number generator. The name used to end in sample(1000:9999, 1), which
+  # created or advanced the caller's .Random.seed (what lab_seed_setting() reports
+  # in package code), and two calls in one second from the same seed drew the same
+  # name and built into one tree.
+  temp_pkg <- tempfile("checktor_example_")
 
   # Create package structure
   dir.create(temp_pkg, recursive = TRUE)
@@ -100,20 +134,9 @@ example_diagnose_scenario <- function(example_path,
   dir.create(file.path(temp_pkg, "man"), recursive = TRUE)
   dir.create(file.path(temp_pkg, "tests"), recursive = TRUE)
 
-  # Determine target location based on file type
-  if (grepl("description_examples", example_path, ignore.case = TRUE)) {
-    # DESCRIPTION files go to package root
-    target_file <- file.path(temp_pkg, "DESCRIPTION")
-    file.copy(example_file, target_file)
-  } else if (grepl("documentation_examples", example_path, ignore.case = TRUE)) {
-    # .Rd files go to man/
-    target_file <- file.path(temp_pkg, "man", basename(example_file))
-    file.copy(example_file, target_file)
-  } else {
-    # R code files go to R/
-    target_file <- file.path(temp_pkg, "R", basename(example_file))
-    file.copy(example_file, target_file)
-  }
+  target_file <- file.path(temp_pkg, target)
+  dir.create(dirname(target_file), recursive = TRUE, showWarnings = FALSE)
+  file.copy(example_file, target_file)
 
   # Create DESCRIPTION file if not already created from example
   desc_path <- file.path(temp_pkg, "DESCRIPTION")
@@ -123,18 +146,23 @@ example_diagnose_scenario <- function(example_path,
 
   # Standard CRAN-prep files so the scenario isolates the single injected
   # issue (the general NEWS/cran-comments checks would otherwise also fire).
-  writeLines(c("# examplepackage 0.1.0", "", "* Initial scenario."),
-             file.path(temp_pkg, "NEWS.md"))
-  writeLines(c("## Test environments", "* local"),
-             file.path(temp_pkg, "cran-comments.md"))
+  writeLines(
+    c("# examplepackage 0.1.0", "", "* Initial scenario."),
+    file.path(temp_pkg, "NEWS.md")
+  )
+  writeLines(
+    c("## Test environments", "* local"),
+    file.path(temp_pkg, "cran-comments.md")
+  )
 
   # Show file content if requested
+  # The file is printed with cli_verbatim(), which applies no glue, so a brace
+  # in a scenario (a function body, an Rd macro) prints as written.
   if (show_content) {
-    cat("=== Example file:", basename(example_file), "===\n")
+    cli::cli_rule(left = "Example file: {basename(example_file)}")
     if (file.exists(target_file)) {
-      content <- readLines(target_file)
-      cat(content, sep = "\n")
-      cat("\n=== End of example ===\n\n")
+      cli::cli_verbatim(safe_read_lines(target_file))
+      cli::cli_rule(left = "End of example")
     }
   }
 
@@ -142,68 +170,87 @@ example_diagnose_scenario <- function(example_path,
     defer_cleanup(temp_pkg, envir = parent.frame())
   }
 
-  # Inform user about temporary package location
-  if (show_content) {
-    cat("Temporary package created at:", temp_pkg, "\n")
-    cat("Example file copied to:", target_file, "\n\n")
-  }
-
   return(temp_pkg)
+}
+
+# Where a scenario file goes in the package built around it, relative to the
+# package root, or NA for a file no package keeps. The extension says what the
+# file is. Routing by folder name sent network_examples/bad_network_example.Rd to
+# R/, where no Rd check reads, so the examples that use it showed nothing.
+scenario_target <- function(example_path) {
+  switch(
+    tolower(tools::file_ext(example_path)),
+    txt = "DESCRIPTION",
+    r = file.path("R", basename(example_path)),
+    rd = file.path("man", basename(example_path)),
+    rmd = ,
+    qmd = ,
+    rnw = file.path("vignettes", basename(example_path)),
+    citation = file.path("inst", "CITATION"),
+    license = "LICENSE",
+    NA_character_
+  )
 }
 
 # Helper function to create different types of DESCRIPTION files
 create_example_description <- function(desc_path, type = "minimal") {
+  desc_content <- switch(
+    type,
+    "minimal" = c(
+      "Package: examplepackage",
+      "Title: Example Package for Diagnostic Testing",
+      "Version: 0.1.0",
+      "Authors@R: person('Test', 'User', email = 'test@example.com', role = c('aut', 'cre'))",
+      "Description: This is a temporary package created for testing the",
+      "    diagnostic functions with example code that contains known issues.",
+      # A bare `MIT` is not a valid CRAN license. MIT is a template
+      # licence with no copyright holder of its own, so CRAN requires
+      # `MIT + file LICENSE`. GPL stands alone, which keeps this
+      # fixture self-contained (no LICENSE file to write).
+      "License: GPL (>= 3)",
+      "Encoding: UTF-8",
+      "Depends: R (>= 4.4.0)"
+    ),
 
-  desc_content <- switch(type,
-                         "minimal" = c(
-                           "Package: examplepackage",
-                           "Title: Example Package for Diagnostic Testing",
-                           "Version: 0.1.0",
-                           "Authors@R: person('Test', 'User', email = 'test@example.com', role = c('aut', 'cre'))",
-                           "Description: This is a temporary package created for testing checktor",
-                           "    diagnostic functions with example code that contains known issues.",
-                           "License: MIT",
-                           "Encoding: UTF-8",
-                           "Depends: R (>= 3.5.0)"
-                         ),
+    "bad" = c(
+      "Package: badexample",
+      "Title: example package for testing", # Issues: not title case
+      "Version: 0.1.0",
+      "Author: Test User <test@example.com>", # Issue: should use Authors@R
+      "Maintainer: Test User <test@example.com>",
+      "Description: This package works with ggplot2 and provides API access.", # Issues: no quotes, short, forbidden opener
+      "License: Free to use", # Issue: not a standardizable CRAN license
+      "Encoding: UTF-8",
+      "URL: http://example.com" # Issue: should be https
+    ),
 
-                         "bad" = c(
-                           "Package: badexample",
-                           "Title: example package for testing",  # Issues: not title case
-                           "Version: 0.1.0",
-                           "Author: Test User <test@example.com>",  # Issue: should use Authors@R
-                           "Maintainer: Test User <test@example.com>",
-                           "Description: This package works with ggplot2 and provides API access.",  # Issues: no quotes, short
-                           "License: MIT + file LICENSE",  # Issue: unnecessary for standard MIT
-                           "Encoding: UTF-8",
-                           "URL: http://example.com"  # Issue: should be https
-                         ),
+    "good" = c(
+      "Package: goodexample",
+      "Title: Example Package for Comprehensive Diagnostic Testing",
+      "Version: 0.1.0",
+      "Authors@R: person('Test', 'User', email = 'test@example.com', role = c('aut', 'cre'))",
+      # Must not open with "This package": CRAN rejects it, and so
+      # does lab_description_starts_with().
+      "Description: Demonstrates proper formatting for CRAN submission.",
+      "    It works with 'ggplot2' and provides Application Programming Interface (API)",
+      "    access. The package serves as an example of best practices for R package",
+      "    development and CRAN compliance.",
+      "License: GPL (>= 3)",
+      "Encoding: UTF-8",
+      "URL: https://example.com",
+      "BugReports: https://github.com/user/pkg/issues"
+    ),
 
-                         "good" = c(
-                           "Package: goodexample",
-                           "Title: Example Package for Comprehensive Diagnostic Testing",
-                           "Version: 0.1.0",
-                           "Authors@R: person('Test', 'User', email = 'test@example.com', role = c('aut', 'cre'))",
-                           "Description: This package demonstrates proper formatting for CRAN submission.",
-                           "    It works with 'ggplot2' and provides Application Programming Interface (API)",
-                           "    access. The package serves as an example of best practices for R package",
-                           "    development and CRAN compliance.",
-                           "License: MIT",
-                           "Encoding: UTF-8",
-                           "URL: https://example.com",
-                           "BugReports: https://github.com/user/pkg/issues"
-                         ),
-
-                         # Default to minimal
-                         c(
-                           "Package: examplepackage",
-                           "Title: Example Package for Diagnostic Testing",
-                           "Version: 0.1.0",
-                           "Authors@R: person('Test', 'User', email = 'test@example.com', role = c('aut', 'cre'))",
-                           "Description: Temporary package for testing diagnostics.",
-                           "License: MIT",
-                           "Encoding: UTF-8"
-                         )
+    # Default to minimal
+    c(
+      "Package: examplepackage",
+      "Title: Example Package for Diagnostic Testing",
+      "Version: 0.1.0",
+      "Authors@R: person('Test', 'User', email = 'test@example.com', role = c('aut', 'cre'))",
+      "Description: Temporary package for testing diagnostics.",
+      "License: GPL (>= 3)",
+      "Encoding: UTF-8"
+    )
   )
 
   writeLines(desc_content, desc_path)
@@ -215,7 +262,7 @@ create_example_description <- function(desc_path, type = "minimal") {
 #' can be used with [example_diagnose_scenario()].
 #'
 #' @param category Character. Optional category filter. One of "code",
-#'   "description", "documentation", "network", "temp", or "all".
+#'   "description", "documentation", "general", "network", "temp", or "all".
 #'   Default: "all".
 #' @param pattern Character. Optional regex pattern to filter filenames.
 #'   Default: `NULL` (no filtering).
@@ -240,13 +287,15 @@ create_example_description <- function(desc_path, type = "minimal") {
 #'
 #' # Use with example_diagnose_scenario
 #' examples <- show_example_files("code")
-#' pkg_path <- example_diagnose_scenario(examples[1])
+#' pkg_path <- example_diagnose_scenario(examples[1], show_content = FALSE)
+#' unlink(pkg_path, recursive = TRUE)
 show_example_files <- function(category = "all", pattern = NULL) {
-
   base_path <- system.file("diagnose", package = "checktor")
 
   if (!dir.exists(base_path)) {
-    message("No example files found. Package may not be properly installed.")
+    cli::cli_inform(
+      "No example files found. Package may not be properly installed."
+    )
     return(character(0))
   }
 
@@ -255,13 +304,15 @@ show_example_files <- function(category = "all", pattern = NULL) {
 
   # Filter by category if specified
   if (category != "all") {
-    category_pattern <- switch(category,
-                               "code" = "^code_examples/",
-                               "description" = "^description_examples/",
-                               "documentation" = "^documentation_examples/",
-                               "network" = "^network_examples/",
-                               "temp" = "^temp_examples/",
-                               ".*"  # Default: include all
+    category_pattern <- switch(
+      category,
+      "code" = "^code_examples/",
+      "description" = "^description_examples/",
+      "documentation" = "^documentation_examples/",
+      "general" = "^general_examples/",
+      "network" = "^network_examples/",
+      "temp" = "^temp_examples/",
+      ".*" # Default: include all
     )
     all_files <- all_files[grepl(category_pattern, all_files)]
   }

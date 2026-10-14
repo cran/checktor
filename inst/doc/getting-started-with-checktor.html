@@ -2,7 +2,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
 
 <meta charset="utf-8">
-<meta name="generator" content="quarto-1.9.38">
+<meta name="generator" content="quarto-1.10.18">
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
@@ -10,10 +10,13 @@
 <title>Getting Started with checktor</title>
 <style>
 
-code{white-space: pre-wrap;}
 span.smallcaps{font-variant: small-caps;}
-div.columns{display: flex; gap: min(4vw, 1.5em);}
-div.column{flex: auto; overflow-x: auto;}
+div.columns{display: flex; gap: 1.5em;}
+div.column{flex: auto;}
+@media screen {
+div.columns{gap: min(4vw, 1.5em);}
+div.column{overflow-x: auto;}
+}
 div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
 ul.task-list{list-style: none;}
 ul.task-list li input[type="checkbox"] {
@@ -212,145 +215,230 @@ text-decoration: underline; }
 </header>
 
 
+<style>
+.ct-fig{display:block;margin:1.5rem auto;max-width:100%;height:auto}
+.ct-dark{display:none}
+@media (prefers-color-scheme:dark){.ct-light{display:none}.ct-dark{display:block}}
+[data-bs-theme=light] .ct-light{display:block}
+[data-bs-theme=light] .ct-dark{display:none}
+[data-bs-theme=dark] .ct-light{display:none}
+[data-bs-theme=dark] .ct-dark{display:block}
+</style>
 <h2 id="the-gap-checktor-fills">The gap checktor fills</h2>
-<p><code>R CMD check</code> answers one question well: does this package build and run? It is silent on the question that actually decides your submission: will a CRAN volunteer, reading by hand, send it back? Those are different questions, and the space between them is where afternoons disappear. A title that isn’t in title case. A missing <code>\value{}</code> tag. A stray <code>T</code> where you meant <code>TRUE</code>.</p>
+<p><code>R CMD check</code> answers one question well, whether this package builds and runs. The question that actually decides your submission goes unasked. Will a CRAN volunteer, reading by hand, send it back? Those are different questions, and the space between them is where afternoons disappear. A missing <code>\value{}</code> tag. A <code>set.seed()</code> left inside a function. A Description that never grew past one line. Nothing in the standard toolchain says a word about any of them.</p>
+<p><img role="img" aria-label="Seven failure modes against the three tools that might catch them. R CMD check alone catches undocumented arguments. lintr alone catches a line over 80 characters, which checktor does not check. lintr and checktor both catch a bare T in package code, and R CMD check and checktor both flag a Title that is not in title case. The last three rows, a set.seed() left in a function, a one-line Description, and a missing \value{} tag, are caught only by checktor." src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgOCA2MDAgMjQ0IiB3aWR0aD0iNjAwIiBoZWlnaHQ9IjI0NCIKICAgICByb2xlPSJpbWciIGFyaWEtbGFiZWxsZWRieT0iY292LXQiPgogIDx0aXRsZSBpZD0iY292LXQiPldoYXQgZWFjaCB0b29sIGFjdHVhbGx5IGNhdGNoZXM8L3RpdGxlPgoKICA8IS0tIEV2ZXJ5IGNlbGwgYmVsb3cgd2FzIHZlcmlmaWVkIGJ5IHJ1bm5pbmcgUiBDTUQgY2hlY2sgKGFzLWNyYW4pLCBsaW50cgogICAgICAgKGFsbF9saW50ZXJzKSwgYW5kIGNoZWNrdG9yIGFnYWluc3Qgb25lIGlkZW50aWNhbCBkZW1vIHBhY2thZ2UuIFRoZQogICAgICAgbGluZS1sZW5ndGggcm93IGlzIGluY2x1ZGVkIHByZWNpc2VseSBiZWNhdXNlIGNoZWNrdG9yIGxvc2VzIGl0LiAtLT4KICA8ZyBmb250LWZhbWlseT0idWktbW9ub3NwYWNlLCBTRk1vbm8tUmVndWxhciwgTWVubG8sIENvbnNvbGFzLCBtb25vc3BhY2UiPgoKICAgIDwhLS0gY29sdW1uIGhlYWRzIC0tPgogICAgPGcgZm9udC1mYW1pbHk9InN5c3RlbS11aSwgLWFwcGxlLXN5c3RlbSwgU2Vnb2UgVUksIFJvYm90bywgc2Fucy1zZXJpZiIKICAgICAgIGZvbnQtc2l6ZT0iOCIgbGV0dGVyLXNwYWNpbmc9IjAuOSIgZm9udC13ZWlnaHQ9IjcwMCIgdGV4dC1hbmNob3I9Im1pZGRsZSI+CiAgICAgIDx0ZXh0IHg9IjM3MiIgeT0iMjQiIGZpbGw9IiMwRTJBNDciIGZpbGwtb3BhY2l0eT0iMC41NSI+UiBDTUQgQ0hFQ0s8L3RleHQ+CiAgICAgIDx0ZXh0IHg9IjQ1MiIgeT0iMjQiIGZpbGw9IiMwRTJBNDciIGZpbGwtb3BhY2l0eT0iMC41NSI+TElOVFI8L3RleHQ+CiAgICAgIDx0ZXh0IHg9IjUzMiIgeT0iMjQiIGZpbGw9IiMxRkE0NUMiPkNIRUNLVE9SPC90ZXh0PgogICAgPC9nPgogICAgPHBhdGggZD0iTTYgMzQgSDU5NiIgc3Ryb2tlPSIjMEUyQTQ3IiBzdHJva2Utb3BhY2l0eT0iMC4xMiIvPgoKICAgIDwhLS0gdGhlIGdhcDogdGhlIGxhc3QgdGhyZWUgcm93cywgd2hpY2ggb25seSBjaGVja3RvciBmaWxscyAtLT4KICAgIDxyZWN0IHg9IjIiIHk9IjE0NiIgd2lkdGg9IjU5NCIgaGVpZ2h0PSI3OCIgcng9IjYiIGZpbGw9IiMxRkE0NUMiIGZpbGwtb3BhY2l0eT0iMC4wNyIvPgoKICAgIDwhLS0gcm93IGxhYmVscyAtLT4KICAgIDxnIGZvbnQtc2l6ZT0iMTAiIGZpbGw9IiMwRTJBNDciPgogICAgICA8dGV4dCB4PSI2IiB5PSI1NiI+VW5kb2N1bWVudGVkIGFyZ3VtZW50czwvdGV4dD4KICAgICAgPHRleHQgeD0iNiIgeT0iODIiPkEgbGluZSBvdmVyIDgwIGNoYXJhY3RlcnM8L3RleHQ+CiAgICAgIDx0ZXh0IHg9IjYiIHk9IjEwOCI+QSBiYXJlIFQgaW5zdGVhZCBvZiBUUlVFPC90ZXh0PgogICAgICA8dGV4dCB4PSI2IiB5PSIxMzQiPkEgVGl0bGUgbm90IGluIHRpdGxlIGNhc2U8L3RleHQ+CiAgICAgIDx0ZXh0IHg9IjYiIHk9IjE2NiI+c2V0LnNlZWQoKSBsZWZ0IGluIGEgZnVuY3Rpb248L3RleHQ+CiAgICAgIDx0ZXh0IHg9IjYiIHk9IjE5MiI+QSBEZXNjcmlwdGlvbiBvZiBvbmUgbGluZTwvdGV4dD4KICAgICAgPHRleHQgeD0iNiIgeT0iMjE4Ij5BIG1pc3NpbmcgXHZhbHVle30gdGFnPC90ZXh0PgogICAgPC9nPgoKICAgIDwhLS0gbWlzc2VzIC0tPgogICAgPGcgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMEUyQTQ3IiBzdHJva2Utb3BhY2l0eT0iMC4yIiBzdHJva2Utd2lkdGg9IjEuMiI+CiAgICAgIDxjaXJjbGUgY3g9IjQ1MiIgY3k9IjUyIiAgcj0iNC41Ii8+PGNpcmNsZSBjeD0iNTMyIiBjeT0iNTIiICByPSI0LjUiLz4KICAgICAgPGNpcmNsZSBjeD0iMzcyIiBjeT0iNzgiICByPSI0LjUiLz48Y2lyY2xlIGN4PSI1MzIiIGN5PSI3OCIgIHI9IjQuNSIvPgogICAgICA8Y2lyY2xlIGN4PSIzNzIiIGN5PSIxMDQiIHI9IjQuNSIvPgogICAgICA8Y2lyY2xlIGN4PSI0NTIiIGN5PSIxMzAiIHI9IjQuNSIvPgogICAgICA8Y2lyY2xlIGN4PSIzNzIiIGN5PSIxNjIiIHI9IjQuNSIvPjxjaXJjbGUgY3g9IjQ1MiIgY3k9IjE2MiIgcj0iNC41Ii8+CiAgICAgIDxjaXJjbGUgY3g9IjM3MiIgY3k9IjE4OCIgcj0iNC41Ii8+PGNpcmNsZSBjeD0iNDUyIiBjeT0iMTg4IiByPSI0LjUiLz4KICAgICAgPGNpcmNsZSBjeD0iMzcyIiBjeT0iMjE0IiByPSI0LjUiLz48Y2lyY2xlIGN4PSI0NTIiIGN5PSIyMTQiIHI9IjQuNSIvPgogICAgPC9nPgoKICAgIDwhLS0gY2F1Z2h0IGJ5IFIgQ01EIGNoZWNrIC8gbGludHIgLS0+CiAgICA8ZyBmaWxsPSIjMEUyQTQ3IiBmaWxsLW9wYWNpdHk9IjAuNSI+CiAgICAgIDxjaXJjbGUgY3g9IjM3MiIgY3k9IjUyIiAgcj0iNC41Ii8+CiAgICAgIDxjaXJjbGUgY3g9IjQ1MiIgY3k9Ijc4IiAgcj0iNC41Ii8+CiAgICAgIDxjaXJjbGUgY3g9IjQ1MiIgY3k9IjEwNCIgcj0iNC41Ii8+CiAgICAgIDxjaXJjbGUgY3g9IjM3MiIgY3k9IjEzMCIgcj0iNC41Ii8+CiAgICA8L2c+CgogICAgPCEtLSBjYXVnaHQgYnkgY2hlY2t0b3IgLS0+CiAgICA8ZyBmaWxsPSIjMUZBNDVDIj4KICAgICAgPGNpcmNsZSBjeD0iNTMyIiBjeT0iMTA0IiByPSI0LjUiLz4KICAgICAgPGNpcmNsZSBjeD0iNTMyIiBjeT0iMTMwIiByPSI0LjUiLz4KICAgICAgPGNpcmNsZSBjeD0iNTMyIiBjeT0iMTYyIiByPSI0LjUiLz4KICAgICAgPGNpcmNsZSBjeD0iNTMyIiBjeT0iMTg4IiByPSI0LjUiLz4KICAgICAgPGNpcmNsZSBjeD0iNTMyIiBjeT0iMjE0IiByPSI0LjUiLz4KICAgIDwvZz4KCiAgICA8dGV4dCB4PSI2IiB5PSIyNDQiIGZvbnQtc2l6ZT0iOSIgZmlsbD0iIzBFMkE0NyIgZmlsbC1vcGFjaXR5PSIwLjUiCiAgICAgICAgICBmb250LWZhbWlseT0ic3lzdGVtLXVpLCAtYXBwbGUtc3lzdGVtLCBTZWdvZSBVSSwgUm9ib3RvLCBzYW5zLXNlcmlmIj5UaGUgc2hhZGVkIHJvd3MgYXJlIHRoZSBnYXAuIE5vdGUgdGhlIHNlY29uZCByb3csIHdoZXJlIGxpbnRyIGNhdGNoZXMgd2hhdCBjaGVja3RvciBkb2VzIG5vdC48L3RleHQ+CiAgPC9nPgo8L3N2Zz4K" class="ct-fig ct-light" alt="Seven failure modes against the three tools that might catch them. R CMD check alone catches undocumented arguments. lintr alone catches a line over 80 characters, which checktor does not check. lintr and checktor both catch a bare T in package code, and R CMD check and checktor both flag a Title that is not in title case. The last three rows, a set.seed() left in a function, a one-line Description, and a missing \value{} tag, are caught only by checktor."> <img role="img" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgOCA2MDAgMjQ0IiB3aWR0aD0iNjAwIiBoZWlnaHQ9IjI0NCIKICAgICByb2xlPSJpbWciIGFyaWEtbGFiZWxsZWRieT0iY292LXQiPgogIDx0aXRsZSBpZD0iY292LXQiPldoYXQgZWFjaCB0b29sIGFjdHVhbGx5IGNhdGNoZXM8L3RpdGxlPgoKICA8IS0tIEV2ZXJ5IGNlbGwgYmVsb3cgd2FzIHZlcmlmaWVkIGJ5IHJ1bm5pbmcgUiBDTUQgY2hlY2sgKGFzLWNyYW4pLCBsaW50cgogICAgICAgKGFsbF9saW50ZXJzKSwgYW5kIGNoZWNrdG9yIGFnYWluc3Qgb25lIGlkZW50aWNhbCBkZW1vIHBhY2thZ2UuIFRoZQogICAgICAgbGluZS1sZW5ndGggcm93IGlzIGluY2x1ZGVkIHByZWNpc2VseSBiZWNhdXNlIGNoZWNrdG9yIGxvc2VzIGl0LiAtLT4KICA8ZyBmb250LWZhbWlseT0idWktbW9ub3NwYWNlLCBTRk1vbm8tUmVndWxhciwgTWVubG8sIENvbnNvbGFzLCBtb25vc3BhY2UiPgoKICAgIDwhLS0gY29sdW1uIGhlYWRzIC0tPgogICAgPGcgZm9udC1mYW1pbHk9InN5c3RlbS11aSwgLWFwcGxlLXN5c3RlbSwgU2Vnb2UgVUksIFJvYm90bywgc2Fucy1zZXJpZiIKICAgICAgIGZvbnQtc2l6ZT0iOCIgbGV0dGVyLXNwYWNpbmc9IjAuOSIgZm9udC13ZWlnaHQ9IjcwMCIgdGV4dC1hbmNob3I9Im1pZGRsZSI+CiAgICAgIDx0ZXh0IHg9IjM3MiIgeT0iMjQiIGZpbGw9IiNFN0VFRjUiIGZpbGwtb3BhY2l0eT0iMC41NSI+UiBDTUQgQ0hFQ0s8L3RleHQ+CiAgICAgIDx0ZXh0IHg9IjQ1MiIgeT0iMjQiIGZpbGw9IiNFN0VFRjUiIGZpbGwtb3BhY2l0eT0iMC41NSI+TElOVFI8L3RleHQ+CiAgICAgIDx0ZXh0IHg9IjUzMiIgeT0iMjQiIGZpbGw9IiMxRkE0NUMiPkNIRUNLVE9SPC90ZXh0PgogICAgPC9nPgogICAgPHBhdGggZD0iTTYgMzQgSDU5NiIgc3Ryb2tlPSIjRTdFRUY1IiBzdHJva2Utb3BhY2l0eT0iMC4xMiIvPgoKICAgIDwhLS0gdGhlIGdhcDogdGhlIGxhc3QgdGhyZWUgcm93cywgd2hpY2ggb25seSBjaGVja3RvciBmaWxscyAtLT4KICAgIDxyZWN0IHg9IjIiIHk9IjE0NiIgd2lkdGg9IjU5NCIgaGVpZ2h0PSI3OCIgcng9IjYiIGZpbGw9IiMxRkE0NUMiIGZpbGwtb3BhY2l0eT0iMC4wNyIvPgoKICAgIDwhLS0gcm93IGxhYmVscyAtLT4KICAgIDxnIGZvbnQtc2l6ZT0iMTAiIGZpbGw9IiNFN0VFRjUiPgogICAgICA8dGV4dCB4PSI2IiB5PSI1NiI+VW5kb2N1bWVudGVkIGFyZ3VtZW50czwvdGV4dD4KICAgICAgPHRleHQgeD0iNiIgeT0iODIiPkEgbGluZSBvdmVyIDgwIGNoYXJhY3RlcnM8L3RleHQ+CiAgICAgIDx0ZXh0IHg9IjYiIHk9IjEwOCI+QSBiYXJlIFQgaW5zdGVhZCBvZiBUUlVFPC90ZXh0PgogICAgICA8dGV4dCB4PSI2IiB5PSIxMzQiPkEgVGl0bGUgbm90IGluIHRpdGxlIGNhc2U8L3RleHQ+CiAgICAgIDx0ZXh0IHg9IjYiIHk9IjE2NiI+c2V0LnNlZWQoKSBsZWZ0IGluIGEgZnVuY3Rpb248L3RleHQ+CiAgICAgIDx0ZXh0IHg9IjYiIHk9IjE5MiI+QSBEZXNjcmlwdGlvbiBvZiBvbmUgbGluZTwvdGV4dD4KICAgICAgPHRleHQgeD0iNiIgeT0iMjE4Ij5BIG1pc3NpbmcgXHZhbHVle30gdGFnPC90ZXh0PgogICAgPC9nPgoKICAgIDwhLS0gbWlzc2VzIC0tPgogICAgPGcgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjRTdFRUY1IiBzdHJva2Utb3BhY2l0eT0iMC4yIiBzdHJva2Utd2lkdGg9IjEuMiI+CiAgICAgIDxjaXJjbGUgY3g9IjQ1MiIgY3k9IjUyIiAgcj0iNC41Ii8+PGNpcmNsZSBjeD0iNTMyIiBjeT0iNTIiICByPSI0LjUiLz4KICAgICAgPGNpcmNsZSBjeD0iMzcyIiBjeT0iNzgiICByPSI0LjUiLz48Y2lyY2xlIGN4PSI1MzIiIGN5PSI3OCIgIHI9IjQuNSIvPgogICAgICA8Y2lyY2xlIGN4PSIzNzIiIGN5PSIxMDQiIHI9IjQuNSIvPgogICAgICA8Y2lyY2xlIGN4PSI0NTIiIGN5PSIxMzAiIHI9IjQuNSIvPgogICAgICA8Y2lyY2xlIGN4PSIzNzIiIGN5PSIxNjIiIHI9IjQuNSIvPjxjaXJjbGUgY3g9IjQ1MiIgY3k9IjE2MiIgcj0iNC41Ii8+CiAgICAgIDxjaXJjbGUgY3g9IjM3MiIgY3k9IjE4OCIgcj0iNC41Ii8+PGNpcmNsZSBjeD0iNDUyIiBjeT0iMTg4IiByPSI0LjUiLz4KICAgICAgPGNpcmNsZSBjeD0iMzcyIiBjeT0iMjE0IiByPSI0LjUiLz48Y2lyY2xlIGN4PSI0NTIiIGN5PSIyMTQiIHI9IjQuNSIvPgogICAgPC9nPgoKICAgIDwhLS0gY2F1Z2h0IGJ5IFIgQ01EIGNoZWNrIC8gbGludHIgLS0+CiAgICA8ZyBmaWxsPSIjRTdFRUY1IiBmaWxsLW9wYWNpdHk9IjAuNSI+CiAgICAgIDxjaXJjbGUgY3g9IjM3MiIgY3k9IjUyIiAgcj0iNC41Ii8+CiAgICAgIDxjaXJjbGUgY3g9IjQ1MiIgY3k9Ijc4IiAgcj0iNC41Ii8+CiAgICAgIDxjaXJjbGUgY3g9IjQ1MiIgY3k9IjEwNCIgcj0iNC41Ii8+CiAgICAgIDxjaXJjbGUgY3g9IjM3MiIgY3k9IjEzMCIgcj0iNC41Ii8+CiAgICA8L2c+CgogICAgPCEtLSBjYXVnaHQgYnkgY2hlY2t0b3IgLS0+CiAgICA8ZyBmaWxsPSIjMUZBNDVDIj4KICAgICAgPGNpcmNsZSBjeD0iNTMyIiBjeT0iMTA0IiByPSI0LjUiLz4KICAgICAgPGNpcmNsZSBjeD0iNTMyIiBjeT0iMTMwIiByPSI0LjUiLz4KICAgICAgPGNpcmNsZSBjeD0iNTMyIiBjeT0iMTYyIiByPSI0LjUiLz4KICAgICAgPGNpcmNsZSBjeD0iNTMyIiBjeT0iMTg4IiByPSI0LjUiLz4KICAgICAgPGNpcmNsZSBjeD0iNTMyIiBjeT0iMjE0IiByPSI0LjUiLz4KICAgIDwvZz4KCiAgICA8dGV4dCB4PSI2IiB5PSIyNDQiIGZvbnQtc2l6ZT0iOSIgZmlsbD0iI0U3RUVGNSIgZmlsbC1vcGFjaXR5PSIwLjUiCiAgICAgICAgICBmb250LWZhbWlseT0ic3lzdGVtLXVpLCAtYXBwbGUtc3lzdGVtLCBTZWdvZSBVSSwgUm9ib3RvLCBzYW5zLXNlcmlmIj5UaGUgc2hhZGVkIHJvd3MgYXJlIHRoZSBnYXAuIE5vdGUgdGhlIHNlY29uZCByb3csIHdoZXJlIGxpbnRyIGNhdGNoZXMgd2hhdCBjaGVja3RvciBkb2VzIG5vdC48L3RleHQ+CiAgPC9nPgo8L3N2Zz4K" class="ct-fig ct-dark" aria-hidden="true"></p>
 <p><code>checktor</code> is the specialist your build refers you to before that appointment. It runs the extra-CRAN checks that live in the Repository Policy and reviewers’ long memories but nowhere in the standard toolchain, and, true to the name, it gives you a checkup, a diagnosis, and a prescription.</p>
 <h2 id="installation">Installation</h2>
-<p><code>checktor</code> lives on GitHub for now; once it reaches CRAN you will be able to <code>install.packages(&quot;checktor&quot;)</code>. Until then, install the development version:</p>
+<p><code>checktor</code> is on CRAN, so you can install it the usual way.</p>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co"># install.packages(&quot;pak&quot;)</span></span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>pak<span class="sc">::</span><span class="fu">pak</span>(<span class="st">&quot;coatless-rpkg/checktor&quot;</span>)</span></code></pre></div>
+<div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">install.packages</span>(<span class="st">&quot;checktor&quot;</span>)</span></code></pre></div>
+</div>
+<p>If you want the cutting-edge development version, with the latest changes before they reach CRAN, install it from GitHub.</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co"># install.packages(&quot;pak&quot;)</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>pak<span class="sc">::</span><span class="fu">pak</span>(<span class="st">&quot;coatless-rpkg/checktor&quot;</span>)</span></code></pre></div>
 </div>
 <h2 id="a-first-checkup">A first checkup</h2>
-<p><code>checktor()</code> examines a package directory. So we can watch it work without maiming your own package, we will point it at a throwaway package built around one deliberately bad file:</p>
+<p>Load the package first.</p>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>pkg <span class="ot">&lt;-</span> <span class="fu">example_diagnose_scenario</span>(<span class="st">&quot;code_examples/tf_usage_bad.R&quot;</span>,</span>
-<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>                                 <span class="at">show_content =</span> <span class="cn">FALSE</span>)</span>
-<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>results <span class="ot">&lt;-</span> <span class="fu">checktor</span>(pkg, <span class="at">verbose =</span> <span class="cn">FALSE</span>, <span class="at">progress =</span> <span class="cn">FALSE</span>)</span>
-<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>results</span>
-<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; ── Package Doctor - Diagnosis Summary ──────────────────────────────────────────</span></span>
-<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; Patient: examplepackage</span></span>
-<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; Examined: 2026-06-26 16:16:04.317854</span></span>
-<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; Doctor version: 0.1.0</span></span>
-<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; </span></span>
-<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; CODE ISSUES: 1 failing check</span></span>
-<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; DESCRIPTION ISSUES: 3 failing checks</span></span>
-<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; DOCUMENTATION ISSUES: HEALTHY</span></span>
-<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; GENERAL ISSUES: HEALTHY</span></span>
-<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; POLICY ISSUES: HEALTHY</span></span>
-<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; </span></span>
-<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; ! Overall health: NEEDS </span><span class="al">ATTENTION</span><span class="co"> (10 issues)</span></span>
-<span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; Run `summary()`, `issues()`, or `prescribe()` for details</span></span></code></pre></div>
+<div class="sourceCode cell-code" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(checktor)</span></code></pre></div>
 </div>
-<p>That is the bedside summary: which of the five categories (code, DESCRIPTION, documentation, general, and CRAN policy) need attention, and an overall verdict. On your own package the call is just <code>checktor()</code>. For the full catalogue of what each category checks, see the <a href="https://r-pkg.thecoatlessprofessor.com/checktor/reference/index.html">function reference</a>.</p>
+<p>That brings <code>checktor()</code> and its helpers into your session, so from here everything is a single function call, and the natural place to begin is a checkup.</p>
+<p><code>checktor()</code> examines a package directory. So we can watch it work without maiming your own package, we will point it at a throwaway package built around one deliberately bad file.</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>pkg <span class="ot">&lt;-</span> <span class="fu">example_diagnose_scenario</span>(<span class="st">&quot;code_examples/tf_usage_bad.R&quot;</span>,</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>                                 <span class="at">show_content =</span> <span class="cn">FALSE</span>)</span></code></pre></div>
+</div>
+<p>Here is the file it was built around, bad habits and all.</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Example file showing T/F usage issues</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a><span class="co">#&#39; Process Data Function</span></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a><span class="co">#&#39; @param data A data frame</span></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a><span class="co">#&#39; @return Logical indicating success</span></span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>process_data <span class="ot">&lt;-</span> <span class="cf">function</span>(data) {</span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>  <span class="cf">if</span> (<span class="fu">is.null</span>(data)) {</span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>    <span class="fu">return</span>(F) <span class="co"># Issue: should be FALSE</span></span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a>  has_complete_cases <span class="ot">&lt;-</span> T <span class="co"># Issue: should be TRUE</span></span>
+<span id="cb5-12"><a href="#cb5-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-13"><a href="#cb5-13" aria-hidden="true" tabindex="-1"></a>  <span class="cf">if</span> (has_complete_cases) {</span>
+<span id="cb5-14"><a href="#cb5-14" aria-hidden="true" tabindex="-1"></a>    cleaned_data <span class="ot">&lt;-</span> data[<span class="fu">complete.cases</span>(data), ]</span>
+<span id="cb5-15"><a href="#cb5-15" aria-hidden="true" tabindex="-1"></a>    <span class="fu">return</span>(T) <span class="co"># Issue: should be TRUE</span></span>
+<span id="cb5-16"><a href="#cb5-16" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb5-17"><a href="#cb5-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-18"><a href="#cb5-18" aria-hidden="true" tabindex="-1"></a>  <span class="fu">return</span>(F) <span class="co"># Issue: should be FALSE</span></span>
+<span id="cb5-19"><a href="#cb5-19" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb5-20"><a href="#cb5-20" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-21"><a href="#cb5-21" aria-hidden="true" tabindex="-1"></a><span class="co"># Another function with T/F issues</span></span>
+<span id="cb5-22"><a href="#cb5-22" aria-hidden="true" tabindex="-1"></a>validate_input <span class="ot">&lt;-</span> <span class="cf">function</span>(x, <span class="at">strict =</span> T) {</span>
+<span id="cb5-23"><a href="#cb5-23" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Issue: should be TRUE</span></span>
+<span id="cb5-24"><a href="#cb5-24" aria-hidden="true" tabindex="-1"></a>  <span class="cf">if</span> (<span class="fu">length</span>(x) <span class="sc">==</span> <span class="dv">0</span>) {</span>
+<span id="cb5-25"><a href="#cb5-25" aria-hidden="true" tabindex="-1"></a>    <span class="fu">return</span>(F)</span>
+<span id="cb5-26"><a href="#cb5-26" aria-hidden="true" tabindex="-1"></a>  } <span class="co"># Issue: should be FALSE</span></span>
+<span id="cb5-27"><a href="#cb5-27" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-28"><a href="#cb5-28" aria-hidden="true" tabindex="-1"></a>  valid <span class="ot">&lt;-</span> <span class="fu">all</span>(<span class="fu">is.numeric</span>(x))</span>
+<span id="cb5-29"><a href="#cb5-29" aria-hidden="true" tabindex="-1"></a>  <span class="fu">return</span>(valid <span class="sc">&amp;&amp;</span> strict <span class="sc">==</span> T) <span class="co"># Issue: should be TRUE</span></span>
+<span id="cb5-30"><a href="#cb5-30" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+<blockquote>
+<p>Left to itself, <code>example_diagnose_scenario()</code> prints that file for you, because <code>show_content</code> defaults to <code>TRUE</code>. We pass <code>FALSE</code> and render it above instead, so it arrives as highlighted R rather than console output.</p>
+</blockquote>
+<p>Now the checkup itself.</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb6"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="co"># verbose and progress are off here, which keeps the printout compact</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>results <span class="ot">&lt;-</span> <span class="fu">checktor</span>(pkg, <span class="at">verbose =</span> <span class="cn">FALSE</span>, <span class="at">progress =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>results</span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; ── Package Doctor - Diagnosis Summary ──────────────────────────────────────────</span></span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; Patient: examplepackage</span></span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; Examined: 2026-10-13 20:58:36.462273</span></span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; Doctor version: 0.2.0</span></span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; CODE ISSUES: 1 failing check</span></span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; DESCRIPTION ISSUES: HEALTHY</span></span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; DOCUMENTATION ISSUES: HEALTHY</span></span>
+<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; GENERAL ISSUES: HEALTHY</span></span>
+<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; POLICY ISSUES: HEALTHY</span></span>
+<span id="cb6-14"><a href="#cb6-14" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb6-15"><a href="#cb6-15" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; ℹ 1 check did not run: &quot;url_liveness&quot;.</span></span>
+<span id="cb6-16"><a href="#cb6-16" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; ! Overall health: NEEDS </span><span class="al">ATTENTION</span><span class="co"> (7 issues)</span></span>
+<span id="cb6-17"><a href="#cb6-17" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; Run `summary()`, `issues()`, or `prescribe()` for details</span></span></code></pre></div>
+</div>
+<p>That bedside summary names which of the five categories (code, DESCRIPTION, documentation, general, and CRAN policy) need attention, and gives an overall verdict. For the full catalogue of what each category checks, see the <a href="https://r-pkg.thecoatlessprofessor.com/checktor/reference/index.html">function reference</a>.</p>
+<blockquote>
+<p><strong>On your own package</strong>, the call is simply <code>checktor()</code>. It works from anywhere inside the package, so calling it with your working directory in <code>R/</code> or <code>tests/testthat/</code> still examines the whole package.</p>
+</blockquote>
 <h2 id="reading-the-results-as-data">Reading the results as data</h2>
 <p>The printed report is for humans. When you want to <em>compute</em> on the findings, filter them, count them, fold them into a report of your own, reach for the accessors. They return plain data frames, so you never spelunk through nested lists.</p>
+<p><img role="img" aria-label="The one checktor_results object fans out into three plain data frames. summary() gives 5 rows, one per category, counting the checks that passed, failed and were skipped. issues() gives 7 rows, one per issue, carrying its severity, file and line. tidy() gives 57 rows, one per check, with its severity and whether it passed or was skipped." src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMiA1MzIgMjU2IiB3aWR0aD0iNTMyIiBoZWlnaHQ9IjI1NiIKICAgICByb2xlPSJpbWciIGFyaWEtbGFiZWxsZWRieT0ic2hhcGVzLXQiPgogIDx0aXRsZSBpZD0ic2hhcGVzLXQiPk9uZSByZXN1bHQgb2JqZWN0LCB0aHJlZSBwbGFpbiBkYXRhIGZyYW1lczwvdGl0bGU+CgogIDwhLS0gUm93IGNvdW50cyBhcmUgdGhlIHJlYWwgb25lcyBmcm9tIHRoZSB0Zl91c2FnZSBzY2VuYXJpbyBpbiB0aGUgdmlnbmV0dGUuCiAgICAgICBDYXJkcyBhcmUgc2l6ZWQgdG8gdGhlaXIgbG9uZ2VzdCBsaW5lLCBhbmQgdGhlIGNvdW50IGNoaXBzIGFyZSBpbnNldCBmcm9tCiAgICAgICB0aGUgY2FyZCBlZGdlIHJhdGhlciB0aGFuIGZsdXNoIGFnYWluc3QgaXQuIC0tPgogIDxnIGZvbnQtZmFtaWx5PSJ1aS1tb25vc3BhY2UsIFNGTW9uby1SZWd1bGFyLCBNZW5sbywgQ29uc29sYXMsIG1vbm9zcGFjZSI+CgogICAgPGcgZm9udC1mYW1pbHk9InN5c3RlbS11aSwgLWFwcGxlLXN5c3RlbSwgU2Vnb2UgVUksIFJvYm90bywgc2Fucy1zZXJpZiIKICAgICAgIGZvbnQtc2l6ZT0iOSIgbGV0dGVyLXNwYWNpbmc9IjEuMiIgZm9udC13ZWlnaHQ9IjYwMCIgZmlsbD0iIzBFMkE0NyIgZmlsbC1vcGFjaXR5PSIwLjU1Ij4KICAgICAgPHRleHQgeD0iNiIgICB5PSIxNCI+VEhFIE9CSkVDVDwvdGV4dD4KICAgICAgPHRleHQgeD0iMTkwIiB5PSIxNCI+VEhSRUUgUExBSU4gREFUQSBGUkFNRVM8L3RleHQ+CiAgICA8L2c+CgogICAgPCEtLSB0aGUgb2JqZWN0IC0tPgogICAgPHJlY3QgeD0iNiIgeT0iMTExIiB3aWR0aD0iMTMyIiBoZWlnaHQ9IjUyIiByeD0iNyIKICAgICAgICAgIGZpbGw9IiMwRTJBNDciIGZpbGwtb3BhY2l0eT0iMC4wNCIgc3Ryb2tlPSIjMEUyQTQ3IiBzdHJva2Utb3BhY2l0eT0iMC4xNCIvPgogICAgPHRleHQgeD0iMTYiIHk9IjEzNCIgZm9udC1zaXplPSIxMCIgZmlsbD0iIzBFMkE0NyI+Y2hlY2t0b3JfcmVzdWx0czwvdGV4dD4KICAgIDx0ZXh0IHg9IjE2IiB5PSIxNTEiIGZvbnQtc2l6ZT0iOCIgZmlsbD0iIzBFMkE0NyIgZmlsbC1vcGFjaXR5PSIwLjUiPjU3IGNoZWNrcywgNSBjYXRlZ29yaWVzPC90ZXh0PgoKICAgIDwhLS0gZmFuIG91dCAtLT4KICAgIDxnIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzFGQTQ1QyIgc3Ryb2tlLXdpZHRoPSIxLjQiIHN0cm9rZS1vcGFjaXR5PSIwLjc1Ij4KICAgICAgPHBhdGggZD0iTTEzOCAxMzcgQzE2NCAxMzcgMTY0IDU5IDE5MCA1OSIvPgogICAgICA8cGF0aCBkPSJNMTM4IDEzNyBIMTkwIi8+CiAgICAgIDxwYXRoIGQ9Ik0xMzggMTM3IEMxNjQgMTM3IDE2NCAyMTUgMTkwIDIxNSIvPgogICAgPC9nPgoKICAgIDwhLS0gc3VtbWFyeSgpIC0tPgogICAgPHJlY3QgeD0iMTkwIiB5PSIyNiIgd2lkdGg9IjMzNiIgaGVpZ2h0PSI2NiIgcng9IjciCiAgICAgICAgICBmaWxsPSIjMEUyQTQ3IiBmaWxsLW9wYWNpdHk9IjAuMDQiIHN0cm9rZT0iIzBFMkE0NyIgc3Ryb2tlLW9wYWNpdHk9IjAuMTQiLz4KICAgIDx0ZXh0IHg9IjIwNiIgeT0iNTAiIGZvbnQtc2l6ZT0iMTEiIGZpbGw9IiMwRTJBNDciPnN1bW1hcnkoKTwvdGV4dD4KICAgIDxyZWN0IHg9IjQ1OCIgeT0iMzgiIHdpZHRoPSI1MiIgaGVpZ2h0PSIxNiIgcng9IjMiIGZpbGw9IiMxNTdGNDkiLz4KICAgIDx0ZXh0IHg9IjQ2NiIgeT0iNDkiIGZvbnQtc2l6ZT0iNy41IiBsZXR0ZXItc3BhY2luZz0iMC44IiBmb250LXdlaWdodD0iNzAwIiBmaWxsPSIjRkZGRkZGIgogICAgICAgICAgZm9udC1mYW1pbHk9InN5c3RlbS11aSwgLWFwcGxlLXN5c3RlbSwgU2Vnb2UgVUksIFJvYm90bywgc2Fucy1zZXJpZiI+NSBST1dTPC90ZXh0PgogICAgPHRleHQgeD0iMjA2IiB5PSI2NiIgZm9udC1zaXplPSI4IiBsZXR0ZXItc3BhY2luZz0iMC45IiBmb250LXdlaWdodD0iNjAwIgogICAgICAgICAgZm9udC1mYW1pbHk9InN5c3RlbS11aSwgLWFwcGxlLXN5c3RlbSwgU2Vnb2UgVUksIFJvYm90bywgc2Fucy1zZXJpZiIKICAgICAgICAgIGZpbGw9IiMwRTJBNDciIGZpbGwtb3BhY2l0eT0iMC41NSI+T05FIFJPVyBQRVIgQ0FURUdPUlk8L3RleHQ+CiAgICA8dGV4dCB4PSIyMDYiIHk9IjgyIiBmb250LXNpemU9IjgiIGZpbGw9IiMwRTJBNDciIGZpbGwtb3BhY2l0eT0iMC40NSI+Y2F0ZWdvcnkgIGNoZWNrcyAgcGFzc2VkICBmYWlsZWQgIHNraXBwZWQgIGlzc3VlczwvdGV4dD4KCiAgICA8IS0tIGlzc3VlcygpIC0tPgogICAgPHJlY3QgeD0iMTkwIiB5PSIxMDQiIHdpZHRoPSIzMzYiIGhlaWdodD0iNjYiIHJ4PSI3IgogICAgICAgICAgZmlsbD0iIzBFMkE0NyIgZmlsbC1vcGFjaXR5PSIwLjA0IiBzdHJva2U9IiMwRTJBNDciIHN0cm9rZS1vcGFjaXR5PSIwLjE0Ii8+CiAgICA8dGV4dCB4PSIyMDYiIHk9IjEyOCIgZm9udC1zaXplPSIxMSIgZmlsbD0iIzBFMkE0NyI+aXNzdWVzKCk8L3RleHQ+CiAgICA8cmVjdCB4PSI0NTgiIHk9IjExNiIgd2lkdGg9IjUyIiBoZWlnaHQ9IjE2IiByeD0iMyIgZmlsbD0iIzE1N0Y0OSIvPgogICAgPHRleHQgeD0iNDY2IiB5PSIxMjciIGZvbnQtc2l6ZT0iNy41IiBsZXR0ZXItc3BhY2luZz0iMC44IiBmb250LXdlaWdodD0iNzAwIiBmaWxsPSIjRkZGRkZGIgogICAgICAgICAgZm9udC1mYW1pbHk9InN5c3RlbS11aSwgLWFwcGxlLXN5c3RlbSwgU2Vnb2UgVUksIFJvYm90bywgc2Fucy1zZXJpZiI+NyBST1dTPC90ZXh0PgogICAgPHRleHQgeD0iMjA2IiB5PSIxNDQiIGZvbnQtc2l6ZT0iOCIgbGV0dGVyLXNwYWNpbmc9IjAuOSIgZm9udC13ZWlnaHQ9IjYwMCIKICAgICAgICAgIGZvbnQtZmFtaWx5PSJzeXN0ZW0tdWksIC1hcHBsZS1zeXN0ZW0sIFNlZ29lIFVJLCBSb2JvdG8sIHNhbnMtc2VyaWYiCiAgICAgICAgICBmaWxsPSIjMEUyQTQ3IiBmaWxsLW9wYWNpdHk9IjAuNTUiPk9ORSBST1cgUEVSIElTU1VFLCBXSVRIIEZJTEUgQU5EIExJTkU8L3RleHQ+CiAgICA8dGV4dCB4PSIyMDYiIHk9IjE2MCIgZm9udC1zaXplPSI4IiBmaWxsPSIjMEUyQTQ3IiBmaWxsLW9wYWNpdHk9IjAuNDUiPmNhdGVnb3J5ICBjaGVjayAgc2V2ZXJpdHkgIGZpbGUgIGxpbmUgIGxvY2F0aW9uICBtZXNzYWdlPC90ZXh0PgoKICAgIDwhLS0gdGlkeSgpIC0tPgogICAgPHJlY3QgeD0iMTkwIiB5PSIxODIiIHdpZHRoPSIzMzYiIGhlaWdodD0iNjYiIHJ4PSI3IgogICAgICAgICAgZmlsbD0iIzBFMkE0NyIgZmlsbC1vcGFjaXR5PSIwLjA0IiBzdHJva2U9IiMwRTJBNDciIHN0cm9rZS1vcGFjaXR5PSIwLjE0Ii8+CiAgICA8dGV4dCB4PSIyMDYiIHk9IjIwNiIgZm9udC1zaXplPSIxMSIgZmlsbD0iIzBFMkE0NyI+dGlkeSgpPC90ZXh0PgogICAgPHJlY3QgeD0iNDUyIiB5PSIxOTQiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxNiIgcng9IjMiIGZpbGw9IiMxNTdGNDkiLz4KICAgIDx0ZXh0IHg9IjQ2MCIgeT0iMjA1IiBmb250LXNpemU9IjcuNSIgbGV0dGVyLXNwYWNpbmc9IjAuOCIgZm9udC13ZWlnaHQ9IjcwMCIgZmlsbD0iI0ZGRkZGRiIKICAgICAgICAgIGZvbnQtZmFtaWx5PSJzeXN0ZW0tdWksIC1hcHBsZS1zeXN0ZW0sIFNlZ29lIFVJLCBSb2JvdG8sIHNhbnMtc2VyaWYiPjU3IFJPV1M8L3RleHQ+CiAgICA8dGV4dCB4PSIyMDYiIHk9IjIyMiIgZm9udC1zaXplPSI4IiBsZXR0ZXItc3BhY2luZz0iMC45IiBmb250LXdlaWdodD0iNjAwIgogICAgICAgICAgZm9udC1mYW1pbHk9InN5c3RlbS11aSwgLWFwcGxlLXN5c3RlbSwgU2Vnb2UgVUksIFJvYm90bywgc2Fucy1zZXJpZiIKICAgICAgICAgIGZpbGw9IiMwRTJBNDciIGZpbGwtb3BhY2l0eT0iMC41NSI+T05FIFJPVyBQRVIgQ0hFQ0ssIFBBU1NFRCBPUiBOT1Q8L3RleHQ+CiAgICA8dGV4dCB4PSIyMDYiIHk9IjIzOCIgZm9udC1zaXplPSI4IiBmaWxsPSIjMEUyQTQ3IiBmaWxsLW9wYWNpdHk9IjAuNDUiPmNhdGVnb3J5ICBjaGVjayAgc2V2ZXJpdHkgIHBhc3NlZCAgc2tpcHBlZCAgbl9pc3N1ZXMgIG1lc3NhZ2U8L3RleHQ+CiAgPC9nPgo8L3N2Zz4K" class="ct-fig ct-light" alt="The one checktor_results object fans out into three plain data frames. summary() gives 5 rows, one per category, counting the checks that passed, failed and were skipped. issues() gives 7 rows, one per issue, carrying its severity, file and line. tidy() gives 57 rows, one per check, with its severity and whether it passed or was skipped."> <img role="img" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMiA1MzIgMjU2IiB3aWR0aD0iNTMyIiBoZWlnaHQ9IjI1NiIKICAgICByb2xlPSJpbWciIGFyaWEtbGFiZWxsZWRieT0ic2hhcGVzLXQiPgogIDx0aXRsZSBpZD0ic2hhcGVzLXQiPk9uZSByZXN1bHQgb2JqZWN0LCB0aHJlZSBwbGFpbiBkYXRhIGZyYW1lczwvdGl0bGU+CgogIDwhLS0gUm93IGNvdW50cyBhcmUgdGhlIHJlYWwgb25lcyBmcm9tIHRoZSB0Zl91c2FnZSBzY2VuYXJpbyBpbiB0aGUgdmlnbmV0dGUuCiAgICAgICBDYXJkcyBhcmUgc2l6ZWQgdG8gdGhlaXIgbG9uZ2VzdCBsaW5lLCBhbmQgdGhlIGNvdW50IGNoaXBzIGFyZSBpbnNldCBmcm9tCiAgICAgICB0aGUgY2FyZCBlZGdlIHJhdGhlciB0aGFuIGZsdXNoIGFnYWluc3QgaXQuIC0tPgogIDxnIGZvbnQtZmFtaWx5PSJ1aS1tb25vc3BhY2UsIFNGTW9uby1SZWd1bGFyLCBNZW5sbywgQ29uc29sYXMsIG1vbm9zcGFjZSI+CgogICAgPGcgZm9udC1mYW1pbHk9InN5c3RlbS11aSwgLWFwcGxlLXN5c3RlbSwgU2Vnb2UgVUksIFJvYm90bywgc2Fucy1zZXJpZiIKICAgICAgIGZvbnQtc2l6ZT0iOSIgbGV0dGVyLXNwYWNpbmc9IjEuMiIgZm9udC13ZWlnaHQ9IjYwMCIgZmlsbD0iI0U3RUVGNSIgZmlsbC1vcGFjaXR5PSIwLjU1Ij4KICAgICAgPHRleHQgeD0iNiIgICB5PSIxNCI+VEhFIE9CSkVDVDwvdGV4dD4KICAgICAgPHRleHQgeD0iMTkwIiB5PSIxNCI+VEhSRUUgUExBSU4gREFUQSBGUkFNRVM8L3RleHQ+CiAgICA8L2c+CgogICAgPCEtLSB0aGUgb2JqZWN0IC0tPgogICAgPHJlY3QgeD0iNiIgeT0iMTExIiB3aWR0aD0iMTMyIiBoZWlnaHQ9IjUyIiByeD0iNyIKICAgICAgICAgIGZpbGw9IiNFN0VFRjUiIGZpbGwtb3BhY2l0eT0iMC4wNCIgc3Ryb2tlPSIjRTdFRUY1IiBzdHJva2Utb3BhY2l0eT0iMC4xNCIvPgogICAgPHRleHQgeD0iMTYiIHk9IjEzNCIgZm9udC1zaXplPSIxMCIgZmlsbD0iI0U3RUVGNSI+Y2hlY2t0b3JfcmVzdWx0czwvdGV4dD4KICAgIDx0ZXh0IHg9IjE2IiB5PSIxNTEiIGZvbnQtc2l6ZT0iOCIgZmlsbD0iI0U3RUVGNSIgZmlsbC1vcGFjaXR5PSIwLjUiPjU3IGNoZWNrcywgNSBjYXRlZ29yaWVzPC90ZXh0PgoKICAgIDwhLS0gZmFuIG91dCAtLT4KICAgIDxnIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzFGQTQ1QyIgc3Ryb2tlLXdpZHRoPSIxLjQiIHN0cm9rZS1vcGFjaXR5PSIwLjc1Ij4KICAgICAgPHBhdGggZD0iTTEzOCAxMzcgQzE2NCAxMzcgMTY0IDU5IDE5MCA1OSIvPgogICAgICA8cGF0aCBkPSJNMTM4IDEzNyBIMTkwIi8+CiAgICAgIDxwYXRoIGQ9Ik0xMzggMTM3IEMxNjQgMTM3IDE2NCAyMTUgMTkwIDIxNSIvPgogICAgPC9nPgoKICAgIDwhLS0gc3VtbWFyeSgpIC0tPgogICAgPHJlY3QgeD0iMTkwIiB5PSIyNiIgd2lkdGg9IjMzNiIgaGVpZ2h0PSI2NiIgcng9IjciCiAgICAgICAgICBmaWxsPSIjRTdFRUY1IiBmaWxsLW9wYWNpdHk9IjAuMDQiIHN0cm9rZT0iI0U3RUVGNSIgc3Ryb2tlLW9wYWNpdHk9IjAuMTQiLz4KICAgIDx0ZXh0IHg9IjIwNiIgeT0iNTAiIGZvbnQtc2l6ZT0iMTEiIGZpbGw9IiNFN0VFRjUiPnN1bW1hcnkoKTwvdGV4dD4KICAgIDxyZWN0IHg9IjQ1OCIgeT0iMzgiIHdpZHRoPSI1MiIgaGVpZ2h0PSIxNiIgcng9IjMiIGZpbGw9IiMxNTdGNDkiLz4KICAgIDx0ZXh0IHg9IjQ2NiIgeT0iNDkiIGZvbnQtc2l6ZT0iNy41IiBsZXR0ZXItc3BhY2luZz0iMC44IiBmb250LXdlaWdodD0iNzAwIiBmaWxsPSIjRkZGRkZGIgogICAgICAgICAgZm9udC1mYW1pbHk9InN5c3RlbS11aSwgLWFwcGxlLXN5c3RlbSwgU2Vnb2UgVUksIFJvYm90bywgc2Fucy1zZXJpZiI+NSBST1dTPC90ZXh0PgogICAgPHRleHQgeD0iMjA2IiB5PSI2NiIgZm9udC1zaXplPSI4IiBsZXR0ZXItc3BhY2luZz0iMC45IiBmb250LXdlaWdodD0iNjAwIgogICAgICAgICAgZm9udC1mYW1pbHk9InN5c3RlbS11aSwgLWFwcGxlLXN5c3RlbSwgU2Vnb2UgVUksIFJvYm90bywgc2Fucy1zZXJpZiIKICAgICAgICAgIGZpbGw9IiNFN0VFRjUiIGZpbGwtb3BhY2l0eT0iMC41NSI+T05FIFJPVyBQRVIgQ0FURUdPUlk8L3RleHQ+CiAgICA8dGV4dCB4PSIyMDYiIHk9IjgyIiBmb250LXNpemU9IjgiIGZpbGw9IiNFN0VFRjUiIGZpbGwtb3BhY2l0eT0iMC40NSI+Y2F0ZWdvcnkgIGNoZWNrcyAgcGFzc2VkICBmYWlsZWQgIHNraXBwZWQgIGlzc3VlczwvdGV4dD4KCiAgICA8IS0tIGlzc3VlcygpIC0tPgogICAgPHJlY3QgeD0iMTkwIiB5PSIxMDQiIHdpZHRoPSIzMzYiIGhlaWdodD0iNjYiIHJ4PSI3IgogICAgICAgICAgZmlsbD0iI0U3RUVGNSIgZmlsbC1vcGFjaXR5PSIwLjA0IiBzdHJva2U9IiNFN0VFRjUiIHN0cm9rZS1vcGFjaXR5PSIwLjE0Ii8+CiAgICA8dGV4dCB4PSIyMDYiIHk9IjEyOCIgZm9udC1zaXplPSIxMSIgZmlsbD0iI0U3RUVGNSI+aXNzdWVzKCk8L3RleHQ+CiAgICA8cmVjdCB4PSI0NTgiIHk9IjExNiIgd2lkdGg9IjUyIiBoZWlnaHQ9IjE2IiByeD0iMyIgZmlsbD0iIzE1N0Y0OSIvPgogICAgPHRleHQgeD0iNDY2IiB5PSIxMjciIGZvbnQtc2l6ZT0iNy41IiBsZXR0ZXItc3BhY2luZz0iMC44IiBmb250LXdlaWdodD0iNzAwIiBmaWxsPSIjRkZGRkZGIgogICAgICAgICAgZm9udC1mYW1pbHk9InN5c3RlbS11aSwgLWFwcGxlLXN5c3RlbSwgU2Vnb2UgVUksIFJvYm90bywgc2Fucy1zZXJpZiI+NyBST1dTPC90ZXh0PgogICAgPHRleHQgeD0iMjA2IiB5PSIxNDQiIGZvbnQtc2l6ZT0iOCIgbGV0dGVyLXNwYWNpbmc9IjAuOSIgZm9udC13ZWlnaHQ9IjYwMCIKICAgICAgICAgIGZvbnQtZmFtaWx5PSJzeXN0ZW0tdWksIC1hcHBsZS1zeXN0ZW0sIFNlZ29lIFVJLCBSb2JvdG8sIHNhbnMtc2VyaWYiCiAgICAgICAgICBmaWxsPSIjRTdFRUY1IiBmaWxsLW9wYWNpdHk9IjAuNTUiPk9ORSBST1cgUEVSIElTU1VFLCBXSVRIIEZJTEUgQU5EIExJTkU8L3RleHQ+CiAgICA8dGV4dCB4PSIyMDYiIHk9IjE2MCIgZm9udC1zaXplPSI4IiBmaWxsPSIjRTdFRUY1IiBmaWxsLW9wYWNpdHk9IjAuNDUiPmNhdGVnb3J5ICBjaGVjayAgc2V2ZXJpdHkgIGZpbGUgIGxpbmUgIGxvY2F0aW9uICBtZXNzYWdlPC90ZXh0PgoKICAgIDwhLS0gdGlkeSgpIC0tPgogICAgPHJlY3QgeD0iMTkwIiB5PSIxODIiIHdpZHRoPSIzMzYiIGhlaWdodD0iNjYiIHJ4PSI3IgogICAgICAgICAgZmlsbD0iI0U3RUVGNSIgZmlsbC1vcGFjaXR5PSIwLjA0IiBzdHJva2U9IiNFN0VFRjUiIHN0cm9rZS1vcGFjaXR5PSIwLjE0Ii8+CiAgICA8dGV4dCB4PSIyMDYiIHk9IjIwNiIgZm9udC1zaXplPSIxMSIgZmlsbD0iI0U3RUVGNSI+dGlkeSgpPC90ZXh0PgogICAgPHJlY3QgeD0iNDUyIiB5PSIxOTQiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxNiIgcng9IjMiIGZpbGw9IiMxNTdGNDkiLz4KICAgIDx0ZXh0IHg9IjQ2MCIgeT0iMjA1IiBmb250LXNpemU9IjcuNSIgbGV0dGVyLXNwYWNpbmc9IjAuOCIgZm9udC13ZWlnaHQ9IjcwMCIgZmlsbD0iI0ZGRkZGRiIKICAgICAgICAgIGZvbnQtZmFtaWx5PSJzeXN0ZW0tdWksIC1hcHBsZS1zeXN0ZW0sIFNlZ29lIFVJLCBSb2JvdG8sIHNhbnMtc2VyaWYiPjU3IFJPV1M8L3RleHQ+CiAgICA8dGV4dCB4PSIyMDYiIHk9IjIyMiIgZm9udC1zaXplPSI4IiBsZXR0ZXItc3BhY2luZz0iMC45IiBmb250LXdlaWdodD0iNjAwIgogICAgICAgICAgZm9udC1mYW1pbHk9InN5c3RlbS11aSwgLWFwcGxlLXN5c3RlbSwgU2Vnb2UgVUksIFJvYm90bywgc2Fucy1zZXJpZiIKICAgICAgICAgIGZpbGw9IiNFN0VFRjUiIGZpbGwtb3BhY2l0eT0iMC41NSI+T05FIFJPVyBQRVIgQ0hFQ0ssIFBBU1NFRCBPUiBOT1Q8L3RleHQ+CiAgICA8dGV4dCB4PSIyMDYiIHk9IjIzOCIgZm9udC1zaXplPSI4IiBmaWxsPSIjRTdFRUY1IiBmaWxsLW9wYWNpdHk9IjAuNDUiPmNhdGVnb3J5ICBjaGVjayAgc2V2ZXJpdHkgIHBhc3NlZCAgc2tpcHBlZCAgbl9pc3N1ZXMgIG1lc3NhZ2U8L3RleHQ+CiAgPC9nPgo8L3N2Zz4K" class="ct-fig ct-dark" aria-hidden="true"></p>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(results)   <span class="co"># one row per category</span></span>
-<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt;        category checks passed failed issues</span></span>
-<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 1          code     13     12      1      7</span></span>
-<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 2   description     16     13      3      3</span></span>
-<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 3 documentation      8      8      0      0</span></span>
-<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 4       general      4      4      0      0</span></span>
-<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 5        policy      4      4      0      0</span></span></code></pre></div>
+<div class="sourceCode cell-code" id="cb7"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(results)   <span class="co"># one row per category</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt;        category checks passed failed skipped issues</span></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 1          code     16     15      1       0      7</span></span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 2   description     23     23      0       0      0</span></span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 3 documentation     17     17      0       0      0</span></span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 4       general      7      6      0       1      0</span></span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 5        policy      4      4      0       0      0</span></span></code></pre></div>
 </div>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="fu">issues</span>(results)    <span class="co"># one row per issue, with file and line</span></span>
-<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt;       category              check           file line</span></span>
-<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 1         code           tf_usage tf_usage_bad.R    8</span></span>
-<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 2         code           tf_usage tf_usage_bad.R   11</span></span>
-<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 3         code           tf_usage tf_usage_bad.R   15</span></span>
-<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 4         code           tf_usage tf_usage_bad.R   18</span></span>
-<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 5         code           tf_usage tf_usage_bad.R   22</span></span>
-<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 6         code           tf_usage tf_usage_bad.R   23</span></span>
-<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 7         code           tf_usage tf_usage_bad.R   26</span></span>
-<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 8  description            license           &lt;NA&gt;   NA</span></span>
-<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 9  description           cph_role           &lt;NA&gt;   NA</span></span>
-<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 10 description description_length           &lt;NA&gt;   NA</span></span>
-<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt;                                                           location</span></span>
-<span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 1                                                 tf_usage_bad.R:8</span></span>
-<span id="cb4-15"><a href="#cb4-15" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 2                                                tf_usage_bad.R:11</span></span>
-<span id="cb4-16"><a href="#cb4-16" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 3                                                tf_usage_bad.R:15</span></span>
-<span id="cb4-17"><a href="#cb4-17" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 4                                                tf_usage_bad.R:18</span></span>
-<span id="cb4-18"><a href="#cb4-18" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 5                                                tf_usage_bad.R:22</span></span>
-<span id="cb4-19"><a href="#cb4-19" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 6                                                tf_usage_bad.R:23</span></span>
-<span id="cb4-20"><a href="#cb4-20" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 7                                                tf_usage_bad.R:26</span></span>
-<span id="cb4-21"><a href="#cb4-21" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 8  MIT/BSD license requires &#39;+ file LICENSE&#39; for copyright holders</span></span>
-<span id="cb4-22"><a href="#cb4-22" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 9                Authors@R lacks any [cph] (copyright holder) role</span></span>
-<span id="cb4-23"><a href="#cb4-23" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 10                    Description too short: 1 sentences, 18 words</span></span>
-<span id="cb4-24"><a href="#cb4-24" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt;                     message</span></span>
-<span id="cb4-25"><a href="#cb4-25" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 1           T/F usage check</span></span>
-<span id="cb4-26"><a href="#cb4-26" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 2           T/F usage check</span></span>
-<span id="cb4-27"><a href="#cb4-27" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 3           T/F usage check</span></span>
-<span id="cb4-28"><a href="#cb4-28" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 4           T/F usage check</span></span>
-<span id="cb4-29"><a href="#cb4-29" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 5           T/F usage check</span></span>
-<span id="cb4-30"><a href="#cb4-30" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 6           T/F usage check</span></span>
-<span id="cb4-31"><a href="#cb4-31" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 7           T/F usage check</span></span>
-<span id="cb4-32"><a href="#cb4-32" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 8             License check</span></span>
-<span id="cb4-33"><a href="#cb4-33" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 9            cph role check</span></span>
-<span id="cb4-34"><a href="#cb4-34" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 10 Description length check</span></span></code></pre></div>
+<div class="sourceCode cell-code" id="cb8"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="fu">issues</span>(results)    <span class="co"># one row per issue, with file and line</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt;   category    check   severity           file line          location</span></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 1     code tf_usage robustness tf_usage_bad.R    8  tf_usage_bad.R:8</span></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 2     code tf_usage robustness tf_usage_bad.R   11 tf_usage_bad.R:11</span></span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 3     code tf_usage robustness tf_usage_bad.R   15 tf_usage_bad.R:15</span></span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 4     code tf_usage robustness tf_usage_bad.R   18 tf_usage_bad.R:18</span></span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 5     code tf_usage robustness tf_usage_bad.R   22 tf_usage_bad.R:22</span></span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 6     code tf_usage robustness tf_usage_bad.R   25 tf_usage_bad.R:25</span></span>
+<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 7     code tf_usage robustness tf_usage_bad.R   29 tf_usage_bad.R:29</span></span>
+<span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt;           message</span></span>
+<span id="cb8-11"><a href="#cb8-11" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 1 T/F usage check</span></span>
+<span id="cb8-12"><a href="#cb8-12" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 2 T/F usage check</span></span>
+<span id="cb8-13"><a href="#cb8-13" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 3 T/F usage check</span></span>
+<span id="cb8-14"><a href="#cb8-14" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 4 T/F usage check</span></span>
+<span id="cb8-15"><a href="#cb8-15" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 5 T/F usage check</span></span>
+<span id="cb8-16"><a href="#cb8-16" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 6 T/F usage check</span></span>
+<span id="cb8-17"><a href="#cb8-17" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 7 T/F usage check</span></span></code></pre></div>
 </div>
-<p><code>tidy(results)</code> gives one row per check, passed or not, and <code>as.data.frame()</code> is its alias. Three predicates answer the yes/no questions directly:</p>
+<p><code>tidy(results)</code> gives one row per check, passed or not, and <code>as.data.frame()</code> is its alias. Its <code>skipped</code> column marks any check that did not run, such as the URL fetch when you are not at the console, so a check that sat out never reads as one that passed. <code>summary()</code> counts such a check under <code>skipped</code>, so <code>passed</code>, <code>failed</code> and <code>skipped</code> add up to <code>checks</code>. Three helpers answer the common questions directly:</p>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="fu">is_healthy</span>(results)</span>
-<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; [1] FALSE</span></span>
-<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a><span class="fu">n_issues</span>(results)</span>
-<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; [1] 10</span></span>
-<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a><span class="fu">failed_checks</span>(results)</span>
-<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; [1] &quot;code.tf_usage&quot;                  &quot;description.license&quot;           </span></span>
-<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; [3] &quot;description.cph_role&quot;           &quot;description.description_length&quot;</span></span></code></pre></div>
+<div class="sourceCode cell-code" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="fu">is_healthy</span>(results)</span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; [1] FALSE</span></span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a><span class="fu">n_issues</span>(results)</span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; [1] 7</span></span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a><span class="fu">failed_checks</span>(results)</span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; [1] &quot;code.tf_usage&quot;</span></span></code></pre></div>
 </div>
-<p>Each accessor also works on a single category, as in <code>issues(results$code_issues)</code>, or on a single check.</p>
+<p><code>is_healthy()</code> and <code>n_issues()</code> follow the verdict, counting only the policy and robustness tiers, while <code>issues()</code> and <code>failed_checks()</code> list every tier, opinion included. Each accessor also works on a single category, as in <code>issues(results$code_issues)</code>, or on a single check.</p>
 <h2 id="the-one-line-gate">The one-line gate</h2>
 <p>For scripts and pre-submission checklists, <code>checkup()</code> collapses the whole diagnosis to a single verdict, <code>TRUE</code> when the package is clean:</p>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb6"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="fu">checkup</span>(pkg)</span>
-<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; [1] FALSE</span></span></code></pre></div>
+<div class="sourceCode cell-code" id="cb10"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="fu">checkup</span>(pkg)</span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; [1] FALSE</span></span></code></pre></div>
 </div>
-<p>It is built to be the last word in a shell one-liner; the <a href="checktor-in-ci.html">checktor in Continuous Integration</a> vignette puts it in charge of a GitHub Actions build.</p>
+<p>Built to be the last word in a shell one-liner, it takes charge of a GitHub Actions build in the <a href="checktor-in-ci.html">checktor in Continuous Integration</a> vignette.</p>
 <h2 id="from-diagnosis-to-treatment">From diagnosis to treatment</h2>
-<p>A diagnosis you cannot act on is just bad news. <code>prescribe()</code> turns each finding into a concrete remedy:</p>
+<p>A diagnosis you cannot act on is just bad news. <code>prescribe()</code> turns each finding into a concrete remedy, with the before and after spelled out.</p>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb7"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="fu">prescribe</span>(results)</span></code></pre></div>
+<div class="sourceCode cell-code" id="cb11"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="fu">prescribe</span>(results)</span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; ── Treatment Recommendations ───────────────────────────────────────────────────</span></span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; ── T/F Usage Issues</span></span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; Issues found:</span></span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; • tf_usage_bad.R:8</span></span>
+<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; • tf_usage_bad.R:11</span></span>
+<span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; • tf_usage_bad.R:15</span></span>
+<span id="cb11-9"><a href="#cb11-9" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; • tf_usage_bad.R:18</span></span>
+<span id="cb11-10"><a href="#cb11-10" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; • tf_usage_bad.R:22</span></span>
+<span id="cb11-11"><a href="#cb11-11" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; ... and 2 more</span></span>
+<span id="cb11-12"><a href="#cb11-12" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; Treatment: Replace `T` with `TRUE` and `F` with `FALSE`</span></span>
+<span id="cb11-13"><a href="#cb11-13" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; # Before</span></span>
+<span id="cb11-14"><a href="#cb11-14" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; result &lt;- T</span></span>
+<span id="cb11-15"><a href="#cb11-15" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; # After</span></span>
+<span id="cb11-16"><a href="#cb11-16" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; result &lt;- TRUE</span></span>
+<span id="cb11-17"><a href="#cb11-17" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; </span></span></code></pre></div>
 </div>
 <p><code>health_report()</code> writes the whole consultation to a file, as Markdown, HTML, or plain text, to keep alongside your <code>cran-comments.md</code>:</p>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb8"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="fu">health_report</span>(results, <span class="at">file =</span> <span class="st">&quot;package-health.md&quot;</span>)</span>
-<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="fu">health_report</span>(results, <span class="at">file =</span> <span class="st">&quot;package-health.html&quot;</span>, <span class="at">format =</span> <span class="st">&quot;html&quot;</span>)</span></code></pre></div>
+<div class="sourceCode cell-code" id="cb12"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="fu">health_report</span>(results, <span class="at">file =</span> <span class="st">&quot;package-health.md&quot;</span>)</span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a><span class="fu">health_report</span>(results, <span class="at">file =</span> <span class="st">&quot;package-health.html&quot;</span>, <span class="at">format =</span> <span class="st">&quot;html&quot;</span>)</span></code></pre></div>
 </div>
 <h2 id="examining-one-system-at-a-time">Examining one system at a time</h2>
 <p>Each category runs on its own, which helps when you are fixing one thing and would rather not hear about the others:</p>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="fu">diagnose_code_issues</span>()           <span class="co"># just the R sources</span></span>
-<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="fu">diagnose_description_issues</span>()    <span class="co"># just DESCRIPTION</span></span>
-<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a><span class="fu">diagnose_documentation_issues</span>()  <span class="co"># just the .Rd files</span></span>
-<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a><span class="fu">diagnose_general_issues</span>()        <span class="co"># size, URLs</span></span>
-<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a><span class="fu">diagnose_policy_violations</span>()     <span class="co"># CRAN policy</span></span></code></pre></div>
+<div class="sourceCode cell-code" id="cb13"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="fu">diagnose_code_issues</span>()           <span class="co"># just the R sources</span></span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a><span class="fu">diagnose_description_issues</span>()    <span class="co"># just DESCRIPTION</span></span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a><span class="fu">diagnose_documentation_issues</span>()  <span class="co"># help pages, examples, vignettes, demos</span></span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a><span class="fu">diagnose_general_issues</span>()        <span class="co"># size, URLs, NEWS, README links</span></span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a><span class="fu">diagnose_policy_violations</span>()     <span class="co"># CRAN policy</span></span></code></pre></div>
 </div>
+<h2 id="checking-only-what-is-included">Checking only what is included</h2>
+<p><code>R CMD build</code> drops whatever <code>.Rbuildignore</code> matches, and checktor drops the same files. A help topic or vignette held back from the tarball is never checked.</p>
+<p>The <a href="https://github.com/moodymudskipper/devtag">devtag</a> package uses this to document unexported functions: <code>@dev</code> writes the help page and adds the <code>.Rd</code> to <code>.Rbuildignore</code>, so contributors see it and users do not. Those examples can call <code>:::</code> and checktor will not object. The pkgdown-only articles <code>usethis::use_article()</code> writes to <code>vignettes/articles/</code> work the same way.</p>
+<p><code>roxygen_usage</code> is the exception. It reads all of <code>man/</code>, since it asks whether your working tree is in sync with roxygen rather than what is included.</p>
 <h2 id="turning-down-the-volume">Turning down the volume</h2>
 <p><code>checktor()</code> is chatty by design. In a script, quiet it once and every later call inherits the setting:</p>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb10"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="fu">configure_doctor</span>(<span class="at">verbose_default =</span> <span class="cn">FALSE</span>, <span class="at">progress_default =</span> <span class="cn">FALSE</span>)</span>
-<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a><span class="co"># or per call</span></span>
-<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>results <span class="ot">&lt;-</span> <span class="fu">checktor</span>(<span class="at">verbose =</span> <span class="cn">FALSE</span>, <span class="at">progress =</span> <span class="cn">FALSE</span>)</span></code></pre></div>
+<div class="sourceCode cell-code" id="cb14"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="fu">configure_doctor</span>(<span class="at">verbose_default =</span> <span class="cn">FALSE</span>, <span class="at">progress_default =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a><span class="co"># or per call</span></span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a>results <span class="ot">&lt;-</span> <span class="fu">checktor</span>(<span class="at">verbose =</span> <span class="cn">FALSE</span>, <span class="at">progress =</span> <span class="cn">FALSE</span>)</span></code></pre></div>
 </div>
+<h2 id="checks-you-ask-for-and-checks-you-turn-off">Checks you ask for, and checks you turn off</h2>
+<p>A few checks never join a run, because no authority backs them or they ask about your submission workflow rather than the package itself. They are not skipped, since nothing tried to run them. A quiet run does not mention them, but the results name them:</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb15"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a>results<span class="sc">$</span>metadata<span class="sc">$</span>on_request_checks</span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; [1] &quot;cph_role&quot;                    &quot;cran_comments_file&quot;         </span></span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; [3] &quot;description_function_quotes&quot; &quot;format_names&quot;               </span></span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; [5] &quot;title_starts_with_article&quot;</span></span></code></pre></div>
+</div>
+<p>Each one is a <code>lab_*()</code> function like any other check, so running it is one call:</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb16"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="fu">lab_cran_comments_file</span>(pkg, <span class="at">verbose =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; ✔ cran-comments file check: PASSED</span></span></code></pre></div>
+</div>
+<p>Going the other way, a check you have decided against can be turned off. For one package, name it in that package’s <code>DESCRIPTION</code>:</p>
+<pre><code>Config/checktor/disable: news_file</code></pre>
+<p>For every package, set the option once, for example in <code>.Rprofile</code>:</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb18"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="fu">options</span>(<span class="at">checktor.disable =</span> <span class="st">&quot;news_file&quot;</span>)</span></code></pre></div>
+</div>
+<p>A disabled check does not run and is not counted anywhere. That is the difference from a skipped check, which was meant to run and could not.</p>
 <h2 id="where-it-fits">Where it fits</h2>
 <p>Run <code>checktor</code> in the gap between writing code and <code>R CMD check</code>:</p>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb11"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>devtools<span class="sc">::</span><span class="fu">document</span>()</span>
-<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>devtools<span class="sc">::</span><span class="fu">test</span>()</span>
-<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>results <span class="ot">&lt;-</span> <span class="fu">checktor</span>()  <span class="co"># the extra-CRAN checkup</span></span>
-<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a><span class="fu">prescribe</span>(results)     <span class="co"># apply the remedies</span></span>
-<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a>devtools<span class="sc">::</span><span class="fu">check</span>()      <span class="co"># the standard checks</span></span></code></pre></div>
+<div class="sourceCode cell-code" id="cb19"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a>devtools<span class="sc">::</span><span class="fu">document</span>()</span>
+<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a>devtools<span class="sc">::</span><span class="fu">test</span>()</span>
+<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a>results <span class="ot">&lt;-</span> <span class="fu">checktor</span>()  <span class="co"># the extra-CRAN checkup</span></span>
+<span id="cb19-5"><a href="#cb19-5" aria-hidden="true" tabindex="-1"></a><span class="fu">prescribe</span>(results)     <span class="co"># read the remedies</span></span>
+<span id="cb19-6"><a href="#cb19-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-7"><a href="#cb19-7" aria-hidden="true" tabindex="-1"></a>devtools<span class="sc">::</span><span class="fu">check</span>()      <span class="co"># the standard checks</span></span></code></pre></div>
 </div>
 <h2 id="conclusion">Conclusion</h2>
-<p><code>checktor</code> is a checkup, not a cure-all. It complements <code>R CMD check</code> and <a href="https://lintr.r-lib.org"><code>lintr</code></a> rather than replacing either, and it cannot replace your judgment about whether a package is worth submitting. What it does do is the one thing those tools do not: it remembers the hand-enforced CRAN rules so you do not have to. Run the three together, treat the printed report as the conversation and the accessors as the data, and a reviewer should find nothing left to say. That is the entire point.</p>
+<p><code>checktor</code> is a checkup, not a cure-all. It complements <code>R CMD check</code> and <a href="https://lintr.r-lib.org"><code>lintr</code></a> rather than replacing either, and it cannot replace your judgment about whether a package is worth submitting. What it does do is the one thing those tools do not, remembering the hand-enforced CRAN rules so you do not have to. Run the three together, treat the printed report as the conversation and the accessors as the data, and a reviewer should find nothing left to say. That is the entire point.</p>
 <h2 id="see-also">See also</h2>
 <ul>
+<li><a href="check-sources.html">Where the Checks Come From</a>: the source and severity tier behind every check, from CRAN policy to convention.</li>
+<li><a href="r-cmd-check.html">What R CMD check Checks</a>: every step <code>R CMD check</code> takes, so you can see where checktor begins.</li>
 <li><a href="checktor-in-ci.html">checktor in Continuous Integration</a>: put <code>checkup()</code> in charge of a GitHub Actions build as a quality gate.</li>
 <li><a href="writing-checks.html">Writing Your Own Checks</a>: add project-specific checks against the parsed syntax tree.</li>
 <li><a href="https://r-pkg.thecoatlessprofessor.com/checktor/reference/index.html">Function reference</a>: the full catalogue of diagnostics.</li>

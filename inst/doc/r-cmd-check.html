@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.10.18">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>What R CMD check Checks</title>
+<style>
+
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: 1.5em;}
+div.column{flex: auto;}
+@media screen {
+div.columns{gap: min(4vw, 1.5em);}
+div.column{overflow-x: auto;}
+}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+width: 0.8em;
+margin: 0 0.8em 0.2em -1em;  vertical-align: middle;
+}
+.display.math{display: block; text-align: center; margin: 0.5rem auto;}
+</style>
+
+
+
+
+<style type="text/css">body {
+background-color: #fff;
+margin: 1em auto;
+max-width: 700px;
+overflow: visible;
+padding-left: 2em;
+padding-right: 2em;
+font-family: "Open Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+font-size: 14px;
+line-height: 1.35;
+}
+table {
+margin: 1em auto;
+border-width: 1px;
+border-color: #DDDDDD;
+border-style: outset;
+border-collapse: collapse;
+}
+table th {
+border-width: 2px;
+padding: 5px;
+border-style: inset;
+}
+table td {
+border-width: 1px;
+border-style: inset;
+line-height: 18px;
+padding: 5px 5px;
+}
+table, table th, table td {
+border-left-style: none;
+border-right-style: none;
+}
+table thead, table tr.even {
+background-color: #f7f7f7;
+}
+p {
+margin: 0.5em 0;
+}
+blockquote {
+background-color: #f6f6f6;
+padding: 0.25em 0.75em;
+}
+hr {
+border-style: solid;
+border: none;
+border-top: 1px solid #777;
+margin: 28px 0;
+}
+dl {
+margin-left: 0;
+}
+dl dd {
+margin-bottom: 13px;
+margin-left: 13px;
+}
+dl dt {
+font-weight: bold;
+}
+ul {
+margin-top: 0;
+}
+ul li {
+list-style: circle outside;
+}
+ul ul {
+margin-bottom: 0;
+}
+pre, code {
+background-color: #f7f7f7;
+border-radius: 3px;
+color: #333;
+white-space: pre-wrap; 
+}
+pre {
+border-radius: 3px;
+margin: 5px 0px 10px 0px;
+padding: 10px;
+}
+pre:not([class]) {
+background-color: #f7f7f7;
+}
+code {
+font-family: Consolas, Monaco, 'Courier New', monospace;
+font-size: 85%;
+}
+p > code, li > code {
+padding: 2px 0px;
+}
+div.figure {
+text-align: center;
+}
+img {
+background-color: #FFFFFF;
+padding: 2px;
+border: 1px solid #DDDDDD;
+border-radius: 3px;
+border: 1px solid #CCCCCC;
+margin: 0 5px;
+}
+h1 {
+margin-top: 0;
+font-size: 35px;
+line-height: 40px;
+}
+h2 {
+border-bottom: 4px solid #f7f7f7;
+padding-top: 10px;
+padding-bottom: 2px;
+font-size: 145%;
+}
+h3 {
+border-bottom: 2px solid #f7f7f7;
+padding-top: 10px;
+font-size: 120%;
+}
+h4 {
+border-bottom: 1px solid #f7f7f7;
+margin-left: 8px;
+font-size: 105%;
+}
+h5, h6 {
+border-bottom: 1px solid #ccc;
+font-size: 105%;
+}
+a {
+color: #0033dd;
+text-decoration: none;
+}
+a:hover {
+color: #6666ff; }
+a:visited {
+color: #800080; }
+a:visited:hover {
+color: #BB00BB; }
+a[href^="http:"] {
+text-decoration: underline; }
+a[href^="https:"] {
+text-decoration: underline; }
+</style>
+</head>
+
+<body>
+
+
+<header id="title-block-header">
+<h1 class="title">What R CMD check Checks</h1>
+
+</header>
+
+
+<p><code>R CMD check</code> is a pipeline. It builds your package, installs it, and then runs roughly fifty separate checks, each of which prints a line beginning <code>* checking ...</code> and ends with a verdict. R itself parses those lines back out of the log with a single <a href="https://github.com/wch/r-source/blob/trunk/src/library/tools/R/checktools.R">regular expression</a>, and this page walks through what each one is actually looking at. The checks themselves are defined in R’s own <code>tools</code> package (<a href="https://github.com/wch/r-source/blob/trunk/src/library/tools/R/check.R"><code>check.R</code></a>), and the manual describes the process in <a href="https://cran.r-project.org/doc/manuals/r-release/R-exts.html#Checking-packages">Writing R Extensions, “Checking packages”</a>.</p>
+<p>checktor is deliberately the other half of this story: it runs the extra-CRAN checks that a human reviewer applies but that <code>R CMD check</code> never will. Knowing exactly where <code>R CMD check</code> stops is the fastest way to see where checktor begins, so this page is a map of the territory <code>R CMD check</code> already covers. For the map of checktor’s own checks, see <a href="check-sources.html">Where the Checks Come From</a>.</p>
+<h2 id="the-four-verdicts">The four verdicts</h2>
+<p>Every step ends in one of four states, and only the last three matter.</p>
+<ul>
+<li><code>OK</code> means nothing to report.</li>
+<li><code>NOTE</code> means something a reviewer will likely ask about. A submission with NOTEs can still be accepted, but each one needs a reason.</li>
+<li><code>WARNING</code> means a real problem. CRAN will not accept a package with a WARNING.</li>
+<li><code>ERROR</code> means the check could not complete, usually because code or a test failed outright.</li>
+</ul>
+<p>A clean <code>R CMD check</code> is the floor for a CRAN submission, not the ceiling. Many of its steps are structural (“is this a well-formed package?”) rather than editorial (“is this package good?”), which is exactly the gap a reviewer fills in, and the gap checktor is built for.</p>
+<h2 id="packaging-and-installation">Packaging and installation</h2>
+<p>These run first and decide whether the package is even well-formed enough to install. A failure here stops everything else.</p>
+<table class="caption-top">
+<colgroup>
+<col style="width: 50%">
+<col style="width: 50%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Step</th>
+<th>What it checks</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>checking for file &#39;DESCRIPTION&#39;</code></td>
+<td>The package has a readable <code>DESCRIPTION</code> at its root.</td>
+</tr>
+<tr class="even">
+<td><code>checking package namespace information</code></td>
+<td><code>NAMESPACE</code> exists and parses.</td>
+</tr>
+<tr class="odd">
+<td><code>checking package dependencies</code></td>
+<td>Every package in <code>Depends</code>, <code>Imports</code>, <code>LinkingTo</code>, and <code>Suggests</code> is installed and available.</td>
+</tr>
+<tr class="even">
+<td><code>checking if this is a source package</code></td>
+<td>The tree looks like a source package, not an already-built binary.</td>
+</tr>
+<tr class="odd">
+<td><code>checking if there is a namespace</code></td>
+<td>A <code>NAMESPACE</code> file is present.</td>
+</tr>
+<tr class="even">
+<td><code>checking for executable files</code></td>
+<td>No stray executables are present in the sources.</td>
+</tr>
+<tr class="odd">
+<td><code>checking for hidden files and directories</code></td>
+<td>Flags hidden files (<code>.foo</code>) that are usually build detritus.</td>
+</tr>
+<tr class="even">
+<td><code>checking for portable file names</code></td>
+<td>File names are ASCII, case-insensitively unique, and free of characters that break on other platforms.</td>
+</tr>
+<tr class="odd">
+<td><code>checking for sufficient/correct file permissions</code></td>
+<td>Every file is readable, and nothing is unexpectedly executable.</td>
+</tr>
+<tr class="even">
+<td><code>checking whether package can be installed</code></td>
+<td>The package installs cleanly with <code>R CMD INSTALL</code>; the install log is scanned for warnings.</td>
+</tr>
+<tr class="odd">
+<td><code>checking installed package size</code></td>
+<td>Flags an installed package that is large (a NOTE above ~5 MB).</td>
+</tr>
+<tr class="even">
+<td><code>checking package directory</code></td>
+<td>The installed layout has the directories R expects.</td>
+</tr>
+<tr class="odd">
+<td><code>checking &#39;build&#39; directory</code></td>
+<td>The <code>build/</code> metadata (from <code>R CMD build</code>) is consistent.</td>
+</tr>
+<tr class="even">
+<td><code>checking index information</code></td>
+<td><code>INDEX</code> and demo/vignette indices are present and consistent.</td>
+</tr>
+<tr class="odd">
+<td><code>checking package subdirectories</code></td>
+<td>Subdirectories are named and cased as R requires, with no empty ones.</td>
+</tr>
+<tr class="even">
+<td><code>checking top-level files</code></td>
+<td>Only recognised files sit at the package root.</td>
+</tr>
+<tr class="odd">
+<td><code>checking for left-over files</code></td>
+<td>No editor backups or merge-conflict leftovers are present.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="description-and-metadata">DESCRIPTION and metadata</h2>
+<table class="caption-top">
+<colgroup>
+<col style="width: 50%">
+<col style="width: 50%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Step</th>
+<th>What it checks</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>checking DESCRIPTION meta-information</code></td>
+<td><code>DESCRIPTION</code> parses, the <code>License</code> is recognised, <code>Authors@R</code> is valid, the encoding is declared, and the dependency fields are well-formed.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="r-code">R code</h2>
+<p>The heart of the static analysis. <code>checking R code for possible problems</code> is R’s own linter (<code>codetools</code>), and it catches a great deal on its own.</p>
+<table class="caption-top">
+<colgroup>
+<col style="width: 50%">
+<col style="width: 50%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Step</th>
+<th>What it checks</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>checking code files for non-ASCII characters</code></td>
+<td>R sources are ASCII, or their non-ASCII content is declared.</td>
+</tr>
+<tr class="even">
+<td><code>checking R files for syntax errors</code></td>
+<td>Every <code>.R</code> file parses.</td>
+</tr>
+<tr class="odd">
+<td><code>checking whether the package can be loaded</code></td>
+<td>The package loads without error.</td>
+</tr>
+<tr class="even">
+<td><code>checking whether the package can be loaded with stated dependencies</code></td>
+<td>It loads using only the declared dependencies, catching an undeclared <code>Depends</code>.</td>
+</tr>
+<tr class="odd">
+<td><code>checking whether the package can be unloaded cleanly</code></td>
+<td>Unloading raises no error.</td>
+</tr>
+<tr class="even">
+<td><code>checking whether the namespace can be loaded with stated dependencies</code></td>
+<td>The namespace imports resolve against the declared dependencies.</td>
+</tr>
+<tr class="odd">
+<td><code>checking whether the namespace can be unloaded cleanly</code></td>
+<td>The namespace unloads without error.</td>
+</tr>
+<tr class="even">
+<td><code>checking use of S3 registration</code></td>
+<td>S3 methods are registered through <code>NAMESPACE</code>, not attached by hand.</td>
+</tr>
+<tr class="odd">
+<td><code>checking dependencies in R code</code></td>
+<td>Every <code>pkg::fn</code> and imported symbol traces to a declared dependency.</td>
+</tr>
+<tr class="even">
+<td><code>checking S3 generic/method consistency</code></td>
+<td>An S3 method’s arguments are compatible with its generic.</td>
+</tr>
+<tr class="odd">
+<td><code>checking replacement functions</code></td>
+<td>A <code>foo&lt;-</code> function takes <code>value</code> as its final argument.</td>
+</tr>
+<tr class="even">
+<td><code>checking foreign function calls</code></td>
+<td><code>.C</code>, <code>.Call</code>, and friends name registered, correctly-shaped native routines.</td>
+</tr>
+<tr class="odd">
+<td><code>checking R code for possible problems</code></td>
+<td><code>codetools</code> flags undefined globals, unused arguments, questionable <code>.Internal</code> use, and similar issues across all R code.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="documentation">Documentation</h2>
+<p>Everything here works on the <code>.Rd</code> files, whether written by hand or generated by roxygen2.</p>
+<table class="caption-top">
+<colgroup>
+<col style="width: 50%">
+<col style="width: 50%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Step</th>
+<th>What it checks</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>checking Rd files</code></td>
+<td>Every <code>.Rd</code> file parses and has the required tags.</td>
+</tr>
+<tr class="even">
+<td><code>checking Rd metadata</code></td>
+<td><code>\name</code> and <code>\alias</code> entries are present and unique.</td>
+</tr>
+<tr class="odd">
+<td><code>checking Rd line widths</code></td>
+<td>(<code>--as-cran</code>) Flags <code>\usage</code> lines wider than 90 characters and <code>\examples</code> lines wider than 100.</td>
+</tr>
+<tr class="even">
+<td><code>checking Rd cross-references</code></td>
+<td>Every <code>\link{}</code> points at a topic that exists.</td>
+</tr>
+<tr class="odd">
+<td><code>checking for missing documentation entries</code></td>
+<td>Every exported object has a documented <code>\alias</code>.</td>
+</tr>
+<tr class="even">
+<td><code>checking for code/documentation mismatches</code></td>
+<td>Argument names in <code>\usage</code>, <code>\arguments</code>, and function signatures agree.</td>
+</tr>
+<tr class="odd">
+<td><code>checking Rd \usage sections</code></td>
+<td>Each <code>\usage</code> block matches the object it documents.</td>
+</tr>
+<tr class="even">
+<td><code>checking Rd contents</code></td>
+<td>Flags placeholder or empty sections left in a documentation template.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="examples-tests-and-vignettes">Examples, tests, and vignettes</h2>
+<p>The dynamic checks: R actually runs your code and fails on any error.</p>
+<table class="caption-top">
+<colgroup>
+<col style="width: 50%">
+<col style="width: 50%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Step</th>
+<th>What it checks</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>checking for unstated dependencies in examples</code></td>
+<td>Examples use only declared packages.</td>
+</tr>
+<tr class="even">
+<td><code>checking examples</code></td>
+<td>Every <code>\examples{}</code> block runs without error. <code>\dontrun{}</code> and <code>\donttest{}</code> code is skipped.</td>
+</tr>
+<tr class="odd">
+<td><code>checking examples with --run-donttest</code></td>
+<td>(<code>--as-cran</code>) When the examples contain <code>\donttest{}</code>, they run again with that code included, so it must run without error too.</td>
+</tr>
+<tr class="even">
+<td><code>checking installed files from &#39;inst/doc&#39;</code></td>
+<td>Files under <code>inst/doc</code> are consistent with the vignettes.</td>
+</tr>
+<tr class="odd">
+<td><code>checking files in &#39;vignettes&#39;</code></td>
+<td>The <code>vignettes/</code> sources are well-formed.</td>
+</tr>
+<tr class="even">
+<td><code>checking for unstated dependencies in &#39;tests&#39;</code></td>
+<td>Tests use only declared packages.</td>
+</tr>
+<tr class="odd">
+<td><code>checking tests</code></td>
+<td>The test suite runs; any failure is an ERROR.</td>
+</tr>
+<tr class="even">
+<td><code>checking for unstated dependencies in vignettes</code></td>
+<td>Vignettes use only declared packages.</td>
+</tr>
+<tr class="odd">
+<td><code>checking package vignettes</code></td>
+<td>Vignette metadata and index entries are present and consistent.</td>
+</tr>
+<tr class="even">
+<td><code>checking re-building of vignette outputs</code></td>
+<td>Every vignette rebuilds from source without error.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="the-cran-incoming-checks---as-cran">The CRAN incoming checks (<code>--as-cran</code>)</h2>
+<p>With <code>--as-cran</code>, the checks people actually mean by “the CRAN checks” are added. Most of a maintainer’s NOTEs come from the first line here.</p>
+<table class="caption-top">
+<colgroup>
+<col style="width: 50%">
+<col style="width: 50%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Step</th>
+<th>What it checks</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>checking CRAN incoming feasibility</code></td>
+<td>The submission-readiness pass: the <code>Title</code> case, <code>Version</code>, <code>Date</code>, <code>Description</code>, <code>Authors@R</code>, <code>License</code>, URLs, and DOIs, plus a spell-check and a look for prior versions and problematic dependencies.</td>
+</tr>
+<tr class="even">
+<td><code>checking for future file timestamps</code></td>
+<td>No file is dated in the future.</td>
+</tr>
+<tr class="odd">
+<td><code>checking serialization versions</code></td>
+<td>No saved object uses a serialization format newer than the package’s stated R dependency.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="cleanup">Cleanup</h2>
+<p>The last two steps confirm the check itself left nothing behind.</p>
+<table class="caption-top">
+<colgroup>
+<col style="width: 50%">
+<col style="width: 50%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Step</th>
+<th>What it checks</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>checking for non-standard things in the check directory</code></td>
+<td>No unexpected files were produced during the check.</td>
+</tr>
+<tr class="even">
+<td><code>checking for detritus in the temp directory</code></td>
+<td>The package cleaned up after itself in <code>tempdir()</code>.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="steps-you-will-only-see-sometimes">Steps you will only see sometimes</h2>
+<p>Several checks run only when the package has the matching content.</p>
+<table class="caption-top">
+<colgroup>
+<col style="width: 50%">
+<col style="width: 50%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Step</th>
+<th>Runs when</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>checking contents of &#39;data&#39; directory</code></td>
+<td>The package includes a <code>data/</code> directory.</td>
+</tr>
+<tr class="even">
+<td><code>checking data for non-ASCII characters</code></td>
+<td>The package includes data.</td>
+</tr>
+<tr class="odd">
+<td><code>checking data for ASCII and uncompressed saves</code></td>
+<td>The package includes data, and efficient compression is preferred.</td>
+</tr>
+<tr class="even">
+<td><code>checking line endings in ... sources and headers</code></td>
+<td>The package includes C, C++, or Fortran code.</td>
+</tr>
+<tr class="odd">
+<td><code>checking compilation flags in Makevars</code></td>
+<td>The package includes a <code>src/Makevars</code>.</td>
+</tr>
+<tr class="even">
+<td><code>checking compiled code</code></td>
+<td>The package includes compiled code, and calls to disallowed entry points are reported.</td>
+</tr>
+<tr class="odd">
+<td><code>checking PDF version of manual</code></td>
+<td>The manual is built (skipped by <code>--no-manual</code>).</td>
+</tr>
+</tbody>
+</table>
+<h2 id="where-checktor-fits">Where checktor fits</h2>
+<p>Read the tables above and a pattern emerges. <code>R CMD check</code> asks, thoroughly, <em>is this a well-formed package that builds, installs, and runs?</em> What it almost never asks is <em>is this the way a CRAN reviewer wants it written?</em> It will not object to a bare <code>T</code> in place of <code>TRUE</code>, a <code>set.seed()</code> buried in a function, an unquoted package name in the <code>Title</code>, an exported function with no <code>\value{}</code> tag, or a one-line <code>Description</code>. Those are judgement calls a human makes, and they are where a passing check and a passing review part ways.</p>
+<p>That gap is checktor’s whole job. It runs the extra-CRAN checks that live in the Repository Policy and reviewers’ habits but nowhere in <code>R CMD check</code>. Run the two together: <code>R CMD check</code> for the structure, checktor for the review. See <a href="check-sources.html">Where the Checks Come From</a> for the source and severity behind each one checktor adds.</p>
+
+
+
+
+
+</body></html>

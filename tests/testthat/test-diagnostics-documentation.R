@@ -1,224 +1,275 @@
-# ---- value tags --------------------------------------------------------------
+# A test that names a CRAN package reproduces a false positive or a missed
+# finding from that package's real sources, so a regression fails here first.
 
-test_that("diagnose_value_tags flags missing \\value{} in function topics", {
-  pkg <- make_temp_dir()
-  write_pkg(pkg, rd_files = list("fn.Rd" = c(
-    "\\name{fn}",
-    "\\title{fn}",
-    "\\usage{fn(x)}",
-    "\\description{No value tag here}"
-  )))
-  res <- diagnose_value_tags(pkg, verbose = FALSE)
-  expect_false(res$passed)
-  expect_equal(res$missing, "fn.Rd")
-})
+# Test lab_value_tags() ----
 
-test_that("diagnose_value_tags accepts well-documented topics", {
+test_that("lab_value_tags(): accepts well-documented topics", {
   pkg <- make_temp_dir()
-  write_pkg(pkg, rd_files = list("fn.Rd" = c(
-    "\\name{fn}",
-    "\\title{fn}",
-    "\\usage{fn(x)}",
-    "\\value{A character vector.}"
-  )))
-  expect_true(diagnose_value_tags(pkg, verbose = FALSE)$passed)
-})
-
-test_that("diagnose_value_tags skips data, class, package, and re-export topics", {
-  pkg <- make_temp_dir()
-  write_pkg(pkg, rd_files = list(
-    "mydata.Rd" = c(
-      "\\name{mydata}",
-      "\\docType{data}",
-      "\\title{mydata}",
-      "\\format{A data frame}",
-      "\\usage{data(mydata)}"
-    ),
-    "myclass.Rd" = c(
-      "\\name{MyClass-class}",
-      "\\docType{class}",
-      "\\title{MyClass}"
-    ),
-    "pkg.Rd" = c(
-      "\\name{pkg-package}",
-      "\\alias{pkg-package}",
-      "\\title{pkg}"
-    ),
-    "reexp.Rd" = c(
-      "\\name{reexports}",
-      "\\title{Objects exported from other packages}",
-      "\\description{These are re-exports from other packages.}"
+  write_pkg(
+    pkg,
+    rd_files = list(
+      "fn.Rd" = c(
+        "\\name{fn}",
+        "\\title{fn}",
+        "\\usage{fn(x)}",
+        "\\value{A character vector.}"
+      )
     )
-  ))
-  expect_true(diagnose_value_tags(pkg, verbose = FALSE)$passed)
+  )
+  expect_true(lab_value_tags(pkg, verbose = FALSE)$passed)
 })
 
-# ---- example structure -------------------------------------------------------
-
-test_that("diagnose_example_structure flags unjustified \\dontrun{}", {
+test_that("lab_value_tags(): skips data, class, package and re-export topics", {
   pkg <- make_temp_dir()
-  write_pkg(pkg, rd_files = list("fn.Rd" = c(
-    "\\name{fn}",
-    "\\title{fn}",
-    "\\value{1}",
-    "\\examples{",
-    "\\dontrun{",
-    "  x <- 1 + 1",
-    "}",
-    "}"
-  )))
-  res <- diagnose_example_structure(pkg, verbose = FALSE)
-  expect_false(res$passed)
+  write_pkg(
+    pkg,
+    rd_files = list(
+      "mydata.Rd" = c(
+        "\\name{mydata}",
+        "\\docType{data}",
+        "\\title{mydata}",
+        "\\format{A data frame}",
+        "\\usage{data(mydata)}"
+      ),
+      "myclass.Rd" = c(
+        "\\name{MyClass-class}",
+        "\\docType{class}",
+        "\\title{MyClass}"
+      ),
+      "pkg.Rd" = c(
+        "\\name{pkg-package}",
+        "\\alias{pkg-package}",
+        "\\title{pkg}"
+      ),
+      "reexp.Rd" = c(
+        "\\name{reexports}",
+        "\\title{Objects exported from other packages}",
+        "\\description{These are re-exports from other packages.}"
+      )
+    )
+  )
+  expect_true(lab_value_tags(pkg, verbose = FALSE)$passed)
 })
 
-test_that("diagnose_example_structure accepts \\dontrun{} with a justifying keyword", {
+test_that("lab_value_tags(): leaves roxygen's -package and reexports topics", {
+  # Pins behaviour that is already correct, against a refactor of the guards.
+  # These are the literal shapes roxygen2 emits (copied from checktor's own
+  # man/reexports.Rd and man/checktor-package.Rd), and three separate guards
+  # each independently exempt them: \keyword{internal}, \docType{package}, and
+  # the absence of any \usage/\arguments. Note reexports.Rd carries
+  # \docType{import}, which is NOT in the skipped-docType list -- so the keyword
+  # is what saves it. fn.Rd rides along so the test also fails if the check ever
+  # degrades into "always passes".
   pkg <- make_temp_dir()
-  write_pkg(pkg, rd_files = list("fn.Rd" = c(
-    "\\name{fn}",
-    "\\title{fn}",
-    "\\value{1}",
-    "\\examples{",
-    "\\dontrun{",
-    "  # Requires API token",
-    "  authenticate(api_key = 'secret')",
-    "}",
-    "}"
-  )))
-  expect_true(diagnose_example_structure(pkg, verbose = FALSE)$passed)
-})
-
-test_that("diagnose_example_structure extracts only the \\examples{} block", {
-  # Verifies the balanced-brace extractor doesn't bleed into other sections.
-  pkg <- make_temp_dir()
-  write_pkg(pkg, rd_files = list("fn.Rd" = c(
-    "\\name{fn}",
-    "\\title{fn}",
-    "\\value{1}",
-    "\\examples{",
-    "  x <- 1",       # no \\dontrun here
-    "}",
-    "\\seealso{",
-    "  \\dontrun{not-an-example}",     # outside \\examples - must NOT trigger
-    "}"
-  )))
-  expect_true(diagnose_example_structure(pkg, verbose = FALSE)$passed)
-})
-
-# ---- roxygen usage -----------------------------------------------------------
-
-test_that("diagnose_roxygen_usage detects #' comments", {
-  pkg <- make_temp_dir()
-  write_pkg(pkg, r_code = c(
-    "#' A function",
-    "#' @return TRUE",
-    "f <- function() TRUE"
-  ))
-  res <- diagnose_roxygen_usage(pkg, verbose = FALSE)
-  expect_true(res$has_roxygen)
-})
-
-test_that("diagnose_roxygen_usage reports FALSE when there are no #' lines", {
-  pkg <- make_temp_dir()
-  write_pkg(pkg, r_code = "f <- function() TRUE")
-  res <- diagnose_roxygen_usage(pkg, verbose = FALSE)
-  expect_false(res$has_roxygen)
-})
-
-# ---- missing examples --------------------------------------------------------
-
-test_that("diagnose_missing_examples flags an exported topic without \\examples", {
-  pkg <- make_temp_dir()
-  write_pkg(pkg, rd_files = list("fn.Rd" = c(
-    "\\name{fn}",
-    "\\alias{fn}",
-    "\\title{fn}",
-    "\\usage{fn(x)}",
-    "\\value{A value.}"
-  )))
-  writeLines("export(fn)", file.path(pkg, "NAMESPACE"))
-  res <- diagnose_missing_examples(pkg, verbose = FALSE)
+  write_pkg(
+    pkg,
+    rd_files = list(
+      "reexports.Rd" = c(
+        "% Generated by roxygen2: do not edit by hand",
+        "% Please edit documentation in R/testpkg-package.R",
+        "\\docType{import}",
+        "\\name{reexports}",
+        "\\alias{reexports}",
+        "\\alias{tidy}",
+        "\\title{Objects exported from other packages}",
+        "\\keyword{internal}",
+        "\\description{",
+        "These objects are imported from other packages. Follow the links",
+        "below to see their documentation.",
+        "",
+        "\\describe{",
+        "  \\item{generics}{\\code{\\link[generics:tidy]{tidy()}}}",
+        "}}"
+      ),
+      "testpkg-package.Rd" = c(
+        "% Generated by roxygen2: do not edit by hand",
+        "% Please edit documentation in R/testpkg-package.R",
+        "\\docType{package}",
+        "\\name{testpkg-package}",
+        "\\alias{testpkg-package}",
+        "\\title{testpkg: Test Package for Health Checks}",
+        "\\description{",
+        "A test package created by the checktor test suite.",
+        "}",
+        "\\author{",
+        "\\strong{Maintainer}: A Tester \\email{a@example.com}",
+        "}",
+        "\\keyword{internal}"
+      ),
+      "fn.Rd" = c(
+        "\\name{fn}",
+        "\\alias{fn}",
+        "\\title{fn}",
+        "\\usage{fn(x)}",
+        "\\description{d}"
+      )
+    )
+  )
+  res <- lab_value_tags(pkg, verbose = FALSE)
   expect_false(res$passed)
   expect_equal(res$missing, "fn.Rd")
 })
 
-test_that("diagnose_missing_examples accepts an exported topic with \\examples", {
+test_that("lab_value_tags(): flags missing \\value, exempts internal topics", {
   pkg <- make_temp_dir()
-  write_pkg(pkg, rd_files = list("fn.Rd" = c(
-    "\\name{fn}",
-    "\\alias{fn}",
-    "\\title{fn}",
-    "\\value{A value.}",
-    "\\examples{",
-    "fn(1)",
-    "}"
-  )))
-  writeLines("export(fn)", file.path(pkg, "NAMESPACE"))
-  expect_true(diagnose_missing_examples(pkg, verbose = FALSE)$passed)
-})
-
-test_that("diagnose_missing_examples skips unexported topics and missing NAMESPACE", {
-  pkg <- make_temp_dir()
-  write_pkg(pkg, rd_files = list("fn.Rd" = c(
-    "\\name{fn}", "\\alias{fn}", "\\title{fn}", "\\value{1}"
-  )))
-  writeLines("export(other)", file.path(pkg, "NAMESPACE"))
-  expect_true(diagnose_missing_examples(pkg, verbose = FALSE)$passed)
-
-  pkg2 <- make_temp_dir()
-  write_pkg(pkg2, rd_files = list("fn.Rd" = c(
-    "\\name{fn}", "\\alias{fn}", "\\title{fn}", "\\value{1}"
-  )))                                  # no NAMESPACE at all
-  expect_true(diagnose_missing_examples(pkg2, verbose = FALSE)$passed)
-})
-
-# ---- Suggested packages in examples ------------------------------------------
-
-test_that("diagnose_suggested_in_examples flags unguarded Suggested-package use", {
-  pkg <- make_temp_dir()
-  write_pkg(pkg, extra = "Suggests: dplyr", rd_files = list("fn.Rd" = c(
-    "\\name{fn}", "\\title{fn}", "\\value{1}",
-    "\\examples{",
-    "library(dplyr)",
-    "dplyr::filter(x)",
-    "}"
-  )))
-  res <- diagnose_suggested_in_examples(pkg, verbose = FALSE)
+  write_pkg(
+    pkg,
+    r_code = "f <- function() TRUE",
+    rd_files = list(
+      "f.Rd" = c(
+        "\\name{f}",
+        "\\alias{f}",
+        "\\title{F}",
+        "\\usage{f()}",
+        "\\description{d}"
+      ), # missing \value
+      "g.Rd" = c(
+        "\\name{g}",
+        "\\alias{g}",
+        "\\title{G}",
+        "\\usage{g()}",
+        "\\description{d}",
+        "\\keyword{internal}"
+      ) # internal: exempt
+    )
+  )
+  res <- lab_value_tags(pkg, verbose = FALSE)
   expect_false(res$passed)
+  expect_equal(res$issues, "f.Rd")
 })
 
-test_that("diagnose_suggested_in_examples accepts a requireNamespace guard", {
-  pkg <- make_temp_dir()
-  write_pkg(pkg, extra = "Suggests: dplyr", rd_files = list("fn.Rd" = c(
-    "\\name{fn}", "\\title{fn}", "\\value{1}",
-    "\\examples{",
-    "if (requireNamespace(\"dplyr\", quietly = TRUE)) {",
-    "  library(dplyr)",
-    "}",
-    "}"
-  )))
-  expect_true(diagnose_suggested_in_examples(pkg, verbose = FALSE)$passed)
+# Test lab_roxygen_usage() ----
+
+test_that("lab_roxygen_usage(): flags an @export missing from NAMESPACE", {
+  cases <- list(
+    # The real cost of a forgotten devtools::document(): the function is tagged
+    # for export, is not exported, and R CMD check says nothing.
+    "one-line assignment" = list(
+      r_code = c("#' Add", "#' @export", "add <- function(a, b) a + b"),
+      pattern = "add is tagged @export"
+    ),
+    # One the previous regex implementation got wrong: `add <-` and
+    # `function(a, b)` on separate lines. A "regex the next line for `name <-`"
+    # approach misses this entirely.
+    "assignment split across lines" = list(
+      r_code = c("#' Add", "#' @export", "add <-", "  function(a, b) a + b"),
+      pattern = "add is tagged @export"
+    ),
+    # One the previous regex implementation got wrong.
+    "backticked name assigned with =" = list(
+      r_code = c("#' Odd", "#' @export", "`odd name` = function() NULL"),
+      pattern = "odd name"
+    )
+  )
+  for (case in names(cases)) {
+    pkg <- make_temp_dir()
+    write_roxy_pkg(pkg, cases[[case]]$r_code, namespace = character(0))
+    res <- lab_roxygen_usage(pkg, verbose = FALSE)
+    expect_false(res$passed, info = case)
+    expect_match(res$issues, cases[[case]]$pattern, all = FALSE, info = case)
+  }
 })
 
-test_that("diagnose_suggested_in_examples ignores usage inside \\dontrun", {
-  pkg <- make_temp_dir()
-  write_pkg(pkg, extra = "Suggests: dplyr", rd_files = list("fn.Rd" = c(
-    "\\name{fn}", "\\title{fn}", "\\value{1}",
-    "\\examples{",
-    "\\dontrun{",
-    "library(dplyr)",
-    "}",
-    "}"
-  )))
-  expect_true(diagnose_suggested_in_examples(pkg, verbose = FALSE)$passed)
+test_that("lab_roxygen_usage(): passes when NAMESPACE matches the roxygen tags", {
+  cases <- list(
+    "registered export()" = list(
+      r_code = c("#' Add", "#' @export", "add <- function(a, b) a + b"),
+      namespace = "export(add)"
+    ),
+    # `#' @export` on print.foo generates S3method(print, foo), not export().
+    "S3method() registration" = list(
+      r_code = c("#' Print", "#' @export", "print.foo <- function(x, ...) x"),
+      namespace = "S3method(print,foo)"
+    ),
+    # `@exportS3Method` starts with `@export`; matched loosely it would read as
+    # an @export naming `S3Method` and `generics::tidy`.
+    "@exportS3Method is not @export" = list(
+      r_code = c(
+        "#' Tidy",
+        "#' @exportS3Method generics::tidy",
+        "tidy.foo <- function(x, ...) x"
+      ),
+      namespace = "S3method(generics::tidy,foo)"
+    ),
+    # One the previous regex implementation got wrong. Neither is a roxygen
+    # tag. Only a `#'` COMMENT token counts.
+    "string or plain comment" = list(
+      r_code = c(
+        "# @export not_a_tag",
+        "tag <- \"#' @export also_not_a_tag\"",
+        "helper <- function() NULL"
+      ),
+      namespace = character(0)
+    ),
+    # One the previous regex implementation got wrong. cbcTools/NAMESPACE.
+    # S3method("[",cbc_profiles) quotes the generic; keeping the quotes made
+    # every [.foo / names<-.foo method look unregistered.
+    "non-syntactic S3 methods (cbcTools)" = list(
+      r_code = c(
+        "#' Subset",
+        "#' @export",
+        "`[.cbc_profiles` <- function(x, i) x",
+        "#' Rename",
+        "#' @export",
+        "`names<-.cbc_profiles` <- function(x, value) x"
+      ),
+      namespace = c(
+        "S3method(\"[\",cbc_profiles)",
+        "S3method(\"names<-\",cbc_profiles)"
+      )
+    ),
+    # One the previous regex implementation got wrong. jsonlite/R/fromJSON.R
+    # line 21 is `#' @export fromJSON toJSON`. Storing that whole string as one
+    # name invented a function called "fromJSON toJSON".
+    "several names in one @export (jsonlite)" = list(
+      r_code = c(
+        "#' Convert",
+        "#' @export fromJSON toJSON",
+        "fromJSON <- function(txt) txt",
+        "toJSON <- function(x) x"
+      ),
+      namespace = c("export(fromJSON)", "export(toJSON)")
+    )
+  )
+  for (case in names(cases)) {
+    pkg <- make_temp_dir()
+    write_roxy_pkg(pkg, cases[[case]]$r_code, cases[[case]]$namespace)
+    expect_true(lab_roxygen_usage(pkg, verbose = FALSE)$passed, info = case)
+  }
 })
 
-test_that("diagnose_suggested_in_examples passes when the package has no Suggests", {
+test_that("lab_roxygen_usage(): flags an Rd orphaned by a deleted file", {
   pkg <- make_temp_dir()
-  write_pkg(pkg, rd_files = list("fn.Rd" = c(
-    "\\name{fn}", "\\title{fn}", "\\value{1}",
-    "\\examples{",
-    "library(dplyr)",
-    "}"
-  )))
-  expect_true(diagnose_suggested_in_examples(pkg, verbose = FALSE)$passed)
+  write_roxy_pkg(
+    pkg,
+    r_code = c("#' Add", "#' @export", "add <- function(a, b) a + b"),
+    namespace = "export(add)"
+  )
+  dir.create(file.path(pkg, "man"), showWarnings = FALSE)
+  writeLines(
+    c(
+      "% Generated by roxygen2: do not edit by hand",
+      "% Please edit documentation in R/deleted.R",
+      "\\name{gone}",
+      "\\alias{gone}",
+      "\\title{Gone}",
+      "\\value{NULL}",
+      "\\description{Gone}"
+    ),
+    file.path(pkg, "man", "gone.Rd")
+  )
+
+  res <- lab_roxygen_usage(pkg, verbose = FALSE)
+  expect_false(res$passed)
+  expect_match(res$issues, "no longer exists", all = FALSE)
+})
+
+test_that("lab_roxygen_usage(): ignores a hand-written NAMESPACE", {
+  pkg <- make_temp_dir()
+  write_pkg(
+    pkg,
+    r_code = c("#' Add", "#' @export", "add <- function(a, b) a + b")
+  )
+  writeLines("# hand maintained", file.path(pkg, "NAMESPACE"))
+  expect_true(lab_roxygen_usage(pkg, verbose = FALSE)$passed)
 })

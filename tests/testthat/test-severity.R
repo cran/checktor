@@ -1,0 +1,122 @@
+# Severity tiers: policy / robustness / opinion.
+#
+# A test that names a CRAN package reproduces a false positive or a missed
+# finding from that package's real sources, so a regression fails here first.
+
+# Test check_severity() ----
+
+test_that("check_severity(): falls back to robustness, not to silence", {
+  # An unregistered check is a real finding until someone says otherwise. Failing
+  # safe here means a new check cannot be accidentally invisible.
+  expect_equal(check_severity("no_such_check"), "robustness")
+  expect_equal(check_severity("tf_usage"), "robustness")
+  expect_equal(check_severity("core_usage"), "policy")
+  expect_equal(check_severity("missing_examples"), "opinion")
+})
+
+# The registry in R/severity.R says what tier each check sits in and when it runs.
+# Both used to be spread across unrelated places, so these tests hold the table to
+# what the package actually does.
+
+test_that("check_severity(): each check has a lab_ function named after it", {
+  # The rename exists so `tidy()$check` and the function you call line up. A new
+  # check that breaks that pairing should fail here.
+  exported <- getNamespaceExports("checktor")
+  for (nm in names(CHECK_SEVERITY)) {
+    expect_true(paste0("lab_", nm) %in% exported, info = nm)
+  }
+})
+
+test_that("check_severity(): quoting a package or a language name is policy", {
+  # Writing R Extensions asks for other packages and external software in single
+  # quotes, so a bare name in either vocabulary counts against a clean result.
+  expect_identical(check_severity("software_names"), "policy")
+  expect_identical(check_severity("language_names"), "policy")
+})
+
+test_that("check_severity(): a bare format or markup name is opinion", {
+  # CRAN accepts JSON, HTML, YAML and the rest written either way (#16).
+  expect_identical(check_severity("format_names"), "opinion")
+})
+
+test_that("check_severity(): `urls` is advice, not policy", {
+  # It flags any http:// link. CRAN's NOTE is for URLs that are INVALID or that
+  # REDIRECT, which R determines by FETCHING them; checktor is offline and cannot
+  # know whether a host even offers https. testthat, stringr, rlang, curl,
+  # jsonlite, digest and zoo all ship http:// links and are on CRAN today.
+  expect_equal(check_severity("urls"), "opinion")
+})
+
+test_that("checktor(): the severity defaults spelled out in the usage match the registry", {
+  # The usage shows the tiers literally, since `DEFAULT_SEVERITY` and
+  # `SEVERITY_LEVELS` are not exported and a reader could not type them.
+  withr::local_options(checktor.severity = NULL)
+  expect_identical(eval(formals(checktor)$severity), DEFAULT_SEVERITY)
+  expect_identical(eval(formals(checkup)$severity), DEFAULT_SEVERITY)
+  expect_identical(eval(formals(ci_report)$severity), SEVERITY_LEVELS)
+})
+
+# Test check_when() ----
+
+test_that("check_when(): agrees with what a default run actually does", {
+  pkg <- make_temp_dir()
+  write_pkg(pkg)
+  ran <- tidy(checktor(pkg, verbose = FALSE, progress = FALSE))$check
+
+  # A check marked "request" is only there when you call it yourself.
+  on_request <- names(CHECK_WHEN)[CHECK_WHEN == "request"]
+  expect_false(any(on_request %in% ran), info = paste(on_request, collapse = ", "))
+
+  # Everything else in the severity table is part of the run. A check that runs
+  # but has no tier would silently fall back to `robustness` and quietly join the
+  # verdict. Catch that here rather than in someone's CI.
+  expected <- setdiff(names(CHECK_SEVERITY), on_request)
+  expect_setequal(ran, expected)
+})
+
+test_that("check_when(): defaults to always for anything unlisted", {
+  expect_equal(check_when("tf_usage"), "always")
+  expect_equal(check_when("a_check_that_does_not_exist"), "always")
+  expect_equal(check_when("url_liveness"), "console")
+  expect_equal(check_when("spelling"), "backend")
+  expect_equal(check_when("cran_comments_file"), "request")
+  expect_equal(check_when("format_names"), "request")
+})
+
+# Test the check-sources vignette ----
+
+test_that("check_severity(): the check-sources vignette lists every check at its tier", {
+  path <- vignette_source("check-sources.qmd")
+  skip_if(!nzchar(path), "vignette source not available")
+
+  cells <- vignette_table_cells(path)
+  tiers <- gsub("`", "", cells, fixed = TRUE)
+  listed <- tiers[tiers %in% SEVERITY_LEVELS]
+
+  dupes <- names(listed)[duplicated(names(listed))]
+  expect_identical(dupes, character(0))
+  expect_setequal(names(listed), names(CHECK_SEVERITY))
+  shown <- listed[names(CHECK_SEVERITY)]
+  differ <- names(CHECK_SEVERITY)[shown != CHECK_SEVERITY | is.na(shown)]
+  expect_identical(shown, CHECK_SEVERITY, info = paste(differ, collapse = ", "))
+})
+
+test_that("check_when(): the check-sources vignette lists every check that does not always run", {
+  path <- vignette_source("check-sources.qmd")
+  skip_if(!nzchar(path), "vignette source not available")
+
+  phrases <- c(
+    "at the console" = "console",
+    "with a backend" = "backend",
+    "when you call it" = "request"
+  )
+  cells <- vignette_table_cells(path, section = "Which checks run")
+  unknown <- setdiff(cells, names(phrases))
+  expect_identical(unknown, character(0))
+
+  listed <- stats::setNames(unname(phrases[cells]), names(cells))
+  expect_setequal(names(listed), names(CHECK_WHEN))
+  shown <- listed[names(CHECK_WHEN)]
+  differ <- names(CHECK_WHEN)[shown != CHECK_WHEN | is.na(shown)]
+  expect_identical(shown, CHECK_WHEN, info = paste(differ, collapse = ", "))
+})

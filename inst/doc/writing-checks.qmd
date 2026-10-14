@@ -12,22 +12,49 @@ knitr:
 
 ```{r}
 #| label: setup
+#| include: false
 library(checktor)
 ```
 
-`checktor` ships about thirty diagnostics, but every team has house rules too
+<style>
+.ct-fig{display:block;margin:1.5rem auto;max-width:100%;height:auto}
+.ct-dark{display:none}
+@media (prefers-color-scheme:dark){.ct-light{display:none}.ct-dark{display:block}}
+[data-bs-theme=light] .ct-light{display:block}
+[data-bs-theme=light] .ct-dark{display:none}
+[data-bs-theme=dark] .ct-light{display:none}
+[data-bs-theme=dark] .ct-dark{display:block}
+</style>
+
+`checktor` includes more than sixty checks, but every team has house rules too
 local to upstream: a function you have banned, a header you insist on, a habit
 you keep relapsing into. This vignette is for those. It walks through the
-handful of helpers in `R/ast.R` and shows how to author a new check against the
-parsed syntax tree in a few lines of XPath, with the orchestrator handling the
-bookkeeping.
+handful of helpers in `R/ast.R` and `R/rd.R` and shows how to author a new check
+against the parsed syntax tree in a few lines of XPath, with the orchestrator
+handling the bookkeeping.
+
+Every check walks the same road. Your sources are parsed once into a syntax
+tree, an XPath query picks out the nodes you object to, and each match comes
+back as a `file:line` string inside a result that knows how to print itself.
+The figure traces that road for one of the built-in checks, the one that
+flags an `options()` call whose enclosing function never puts the setting back.
+
+![Four stages. Line 42 of `R/foo.R` calls `options(digits = 3)` inside a function that never resets it. `read_r_xml()` parses the file into a syntax tree, `xpath_lints()` queries that tree with an XPath anchored on the `SYMBOL_FUNCTION_CALL` node for `options`, and the match comes back as the string `foo.R:42` inside a `checktor_check_result` whose `passed` field is `FALSE`.](figures/check-pipeline-light.svg){.ct-fig .ct-light}
+![](figures/check-pipeline-dark.svg){.ct-fig .ct-dark aria-hidden="true"}
 
 ## The shape of a check
 
-Every diagnostic function follows the same contract:
+An individual check is named `lab_<name>()`, where `<name>` is the check name that
+`checktor()` reports in `tidy()$check` and that `Config/checktor` fields refer to.
+Keeping those the same means a reader who sees a finding knows the function to call.
+The five category functions keep their own names, since each runs a whole panel
+rather than one test. Four are `diagnose_<category>_issues()`, and the policy panel
+is `diagnose_policy_violations()`.
+
+Every check follows the same contract:
 
 ```r
-diagnose_<name> <- function(path, verbose = TRUE, parsed = NULL) {
+lab_<name> <- function(path, verbose = TRUE, parsed = NULL) {
   if (is.null(parsed)) parsed <- read_r_xml(path)
   if (length(parsed) == 0L) {
     return(checktor_check_result(TRUE, character(0), "<message>"))
@@ -37,25 +64,33 @@ diagnose_<name> <- function(path, verbose = TRUE, parsed = NULL) {
 }
 ```
 
-The `parsed` argument is an optional parse-cache: when `checktor()` runs all
-code-side checks together it parses each file once and passes the cache to
-every check via this internal argument, so 13 checks against a 200-file
-package mean 200 parses, not 2600.
+> **Why the `parsed` argument?** It holds an optional parse-cache, so when
+> `checktor()` runs all code-side checks together, it parses each file once and
+> hands the cache to every check. Sixteen code-side checks against a 200-file
+> package then mean 200 parses rather than 3,200.
 
-## Helpers in `R/ast.R`
+## Helpers in `R/ast.R` and `R/rd.R`
+
+`R/ast.R` collects the shared machinery and `R/rd.R` the help-page walkers. A
+check leans on the handful below in roughly the order of the road above.
+`read_r_xml()` does the parsing and `xpath_lints()` does the querying, so
+between them they carry every check in the package. The rest are shorthands for
+patterns common enough to have earned a name. Learn the first two and you can
+already write a check.
 
 ### `read_r_xml(path)`
 
-Start here: this is what makes your sources queryable. It parses every
-`R/*.R` file in the package and returns a named list of `list(file, xml,
-error)`. A parse failure becomes an `error` slot instead of crashing the run.
+This is what makes your sources queryable. It parses every `R/*.R` file in the
+package and returns a named list of `list(file, xml, error)`. A parse failure
+becomes an `error` slot instead of crashing the run.
 
 ```r
 parsed <- read_r_xml(".")
-str(parsed[[1]])
+str(parsed[[1]], max.level = 1)
 #> List of 3
-#>  $ file : chr "R/foo.R"
-#>  $ xml  : xml_document
+#>  $ file : chr "./R/bar.R"
+#>  $ xml  :List of 2
+#>   ..- attr(*, "class")= chr [1:2] "xml_document" "xml_node"
 #>  $ error: NULL
 ```
 
@@ -70,9 +105,8 @@ every match across every file, ready to hand to a check result's `$issues`.
 The optional `label` appears in parens after each hit.
 
 ```r
-hits <- xpath_lints(parsed,
-                    "//SYMBOL_FUNCTION_CALL[text() = 'set.seed']")
-#> "foo.R:42" "bar.R:17"
+xpath_lints(parsed, "//SYMBOL_FUNCTION_CALL[text() = 'set.seed']")
+#> [1] "bar.R:17" "foo.R:42"
 ```
 
 ### `undesirable_function_check(parsed, funs, label = TRUE)`
@@ -81,8 +115,8 @@ The most common pattern, "flag any call to function X", has a canned
 helper:
 
 ```r
-issues <- undesirable_function_check(parsed,
-                                     c("install.packages", "browser"))
+undesirable_function_check(parsed, c("install.packages", "browser"))
+#> [1] "foo.R:4 (install.packages())" "foo.R:5 (browser())"
 ```
 
 This is `checktor`'s equivalent of `lintr::undesirable_function_linter()`.
@@ -106,7 +140,10 @@ xpath <- paste0(
 
 ### `extract_rd_section(rd, tag)` and `collect_rd_text(node, skip)`
 
-Walking `.Rd` files structurally via `tools::parse_Rd()`:
+Walking `.Rd` files structurally via `tools::parse_Rd()`; both live in `R/rd.R`.
+Reading `man/` yourself sees every help page, including any that `.Rbuildignore`
+keeps out of the tarball. The built-in checks skip those, so leave them out too
+if your check should judge only what CRAN receives.
 
 ```r
 rd <- tools::parse_Rd("man/my_fn.Rd")
@@ -118,13 +155,13 @@ collect_rd_text(ex, skip = "\\dontrun")
 
 Suppose we want a check that flags any `Sys.setenv()` call whose enclosing
 function doesn't also call `on.exit(Sys.unsetenv(...))` or
-`withr::local_envvar()`. This is the same shape as `diagnose_option_changes`
-and ships in checktor as `diagnose_sys_setenv_no_reset`. Here is the
+`withr::local_envvar()`. This is the same shape as `lab_option_changes`
+and is built into checktor as `lab_sys_setenv`. Here is the
 essential shape:
 
 ```r
-diagnose_sys_setenv_no_reset <- function(path, verbose = TRUE,
-                                         parsed = NULL) {
+lab_sys_setenv <- function(path, verbose = TRUE, parsed = NULL) {
+  # reuse the parse-cache when checktor() supplies one, else parse fresh
   if (is.null(parsed)) parsed <- read_r_xml(path)
   if (length(parsed) == 0L) {
     return(checktor_check_result(TRUE, character(0),
@@ -132,6 +169,7 @@ diagnose_sys_setenv_no_reset <- function(path, verbose = TRUE,
   }
   xpath <- paste0(
     "//SYMBOL_FUNCTION_CALL[text() = 'Sys.setenv'][",
+    # keep only calls whose enclosing function never resets the variable
     "  ", not_under_fn_with_call_xpath(c(
         "on.exit",
         "Sys.unsetenv",
@@ -141,14 +179,18 @@ diagnose_sys_setenv_no_reset <- function(path, verbose = TRUE,
   )
   issues <- xpath_lints(parsed, xpath)
   passed <- length(issues) == 0L
-  # a shipped check also calls emit_issue_summary(issues, verbose, ...) here
+  # a built-in check also calls emit_issue_summary(issues, verbose, ...) here
   # to print the cli summary when verbose = TRUE
   checktor_check_result(passed, issues, "Sys.setenv reset check")
 }
 ```
 
 Twenty lines, and the interesting one is the XPath predicate. Everything else
-is bookkeeping shared with every other check.
+is bookkeeping shared with every other check. The built-in version adds one
+refinement, exempting a setter that captures the old value and hands it back
+(`old <- get_env(); Sys.setenv(...); invisible(old)`), since that is a restore
+contract rather than a leak. Refinements like that are where a real check earns
+its keep, but the skeleton is exactly this.
 
 ## The xmlparsedata XML structure
 
@@ -169,15 +211,19 @@ A call `fn(a, b = 1)` parses to:
 </expr>
 ```
 
-When you anchor on a `SYMBOL_FUNCTION_CALL`:
+Anchor on the `SYMBOL_FUNCTION_CALL` and every other node is one axis away. The
+amber card is the one that catches people out.
+
+![The parse tree for `fn(a, b = 1)`. Anchored on the `SYMBOL_FUNCTION_CALL` node, `parent::expr` reaches only the function-name wrapper, which is the trap. The call expr is `parent::expr/parent::expr`, and the first positional argument is `parent::expr/following-sibling::expr[1]`.](figures/xpath-axes-light.svg){.ct-fig .ct-light}
+![](figures/xpath-axes-dark.svg){.ct-fig .ct-dark aria-hidden="true"}
 
 - the call expr is `parent::expr/parent::expr`
-- the first positional arg is `parent::expr/following-sibling::expr[1]`
+- the first argument expr is `parent::expr/following-sibling::expr[1]`
 - a named-arg name is `parent::expr/parent::expr/SYMBOL_SUB`
 
-A common bug is treating `parent::expr` as the call expr; it is actually the
-function-name wrapper, which has only one child (the
-`SYMBOL_FUNCTION_CALL` itself).
+That middle one is the first *argument*, not the first *positional* argument.
+For `fn(b = 1, a)` the same axis lands on the value `1`, so reach for it only
+when you already know the shape of the call.
 
 ## Trying it out
 
@@ -190,20 +236,114 @@ xpath_lints(parsed,
             "//SYMBOL_FUNCTION_CALL[text() = 'install.packages']")
 ```
 
-To plug a new check into `checktor()`, add a `diagnose_<name>` function to the
-appropriate `R/diagnostics-*.R` file and register it in that file's
-`run_checks(list(...), path, verbose)` call as a closure that forwards the
-cache: `my_check = function(p, v) diagnose_my_check(p, v, parsed = parsed)`.
-That closure is what lets your check share the parse-once cache; the
-orchestrator handles error catching and `$passed` bookkeeping for you.
+## Wiring it into `checktor()`
+
+A finished `lab_*` function does nothing until `checktor()` knows to call it.
+`register_check()` connects the two at run time, with no edit to checktor's own
+source:
+
+```r
+lab_my_check <- function(path, verbose = TRUE, parsed = NULL) {
+  if (is.null(parsed)) parsed <- read_r_xml(path)
+  issues <- undesirable_function_check(parsed, "banned")
+  checktor_check_result(length(issues) == 0L, issues, "no banned()")
+}
+
+register_check("my_check", lab_my_check,
+               category = "code", severity = "policy")
+```
+
+From then on every `checktor()` run includes `my_check`. It appears in
+`issues()`, `tidy()` and the printed report under that name, and counts toward
+the verdict at the tier you gave it.
+
+A few things worth knowing:
+
+- The function returns a `checktor_check_result()`, the same shape as every
+  built-in check, so `run_checks()` handles its error catching and `$passed`
+  bookkeeping.
+- checktor calls it as `fn(path, verbose)`. If the function also declares a
+  `parsed` argument (for `code` and `policy` checks) or a `desc` argument (for
+  `description` checks), checktor forwards its shared cache, so your check reuses
+  the one parse instead of re-reading the sources.
+- `category` is one of `code`, `description`, `documentation`, `general` or
+  `policy`; the check runs alongside that category's built-ins.
+- `severity` is `policy`, `robustness` or `opinion`, and decides whether a
+  finding counts against a clean bill of health under `checktor()`'s `severity`
+  argument.
+- A check that cannot run where it is, because it needs a network, a tool or a
+  credential that is not there, should say so rather than pass. Return
+  `checktor_check_result(TRUE, character(0), "<message>", skipped = TRUE,
+  skip_reason = "<why>")`, and it shows as skipped in `tidy()`, `summary()`, the
+  printed report, `health_report()` and `ci_report()`, never as a pass.
+- `options(checktor.disable = "my_check")` or `Config/checktor/disable` turns a
+  registered check off, the same as a built-in one.
+
+`registered_checks()` lists what is currently registered, and
+`unregister_check("my_check")` (or `unregister_check()` for all) removes it. The
+registry is session-scoped, so call `register_check()` somewhere it runs before
+your check is needed: a project `.Rprofile`, your own package's `.onLoad()`, or
+the top of a CI script.
+
+The helpers the example leans on are exported too, so a check you register has
+the same toolkit the built-ins use: `read_r_xml()`, `xpath_lints()`,
+`xpath_per_file()`, `undesirable_function_check()`,
+`not_under_fn_with_call_xpath()`, and the `.Rd` walkers `extract_rd_section()`
+and `collect_rd_text()`.
+
+> Contributing a check to checktor itself? Then skip the registry and wire it the
+> way the built-in checks are: add `lab_my_check()` to the right
+> `R/diagnostics-*.R` file and add a row for it to the check table in
+> `R/registry.R`, which gives its category, its tier and when it runs. The
+> category function runs every row of its category in table order, passing
+> `parsed` or `desc` to a check whose signature takes it. A check that reads
+> `desc` also gives the message it reports, so it can be shown as skipped when R
+> cannot read the `DESCRIPTION`. A check that should
+> not run every time says so in the row: `console` or `backend` when it needs
+> the network or an external tool, in which case it returns
+> `checktor_skipped_result()` when it cannot run, or `request` when it runs only
+> if called, in which case it stays out of the run altogether. Then add a row for
+> it to [Where the Checks Come From](check-sources.html), and a matching `*_bad`
+> scenario under `inst/diagnose/` for its example. `test-severity.R` holds the
+> table, and the vignette's copy of it, to what actually runs.
+
+## Without writing code
+
+Some house rules need no new check at all. A package configures checktor from
+`Config/checktor/*` fields in its own `DESCRIPTION`. Each field is a
+comma-separated list, and `DESCRIPTION` has no comment syntax, so keep notes out of
+the field: anything after the last name becomes part of it.
+
+```
+Config/checktor/software_names: brms, cmdstanr
+Config/checktor/acronyms: MCMC, GLMM
+Config/checktor/allow: urls:README.md
+Config/checktor/disable: news_file
+```
+
+`software_names` flags those names when they appear unquoted and `acronyms`
+accepts those domain acronyms, each extending the vocabulary its check already
+uses; `language_names` and `format_names` work the same way. `allow` mutes a
+specific finding, either a whole check or a `check:substring`, which is what a
+green `checkup()` gate needs when a finding has been reviewed and accepted.
+`disable` skips a check outright: it does not run and is not counted. To turn a
+check off in every package rather than one, set `options(checktor.disable =
+"news_file")` once, for example in `.Rprofile`; the option and the field are
+combined. Write a check of your own when the rule is genuinely yours, and reach for
+`Config/checktor/*` when you only need to teach or quiet a check checktor already
+includes.
 
 ## Conclusion
 
 Building on the parsed syntax tree buys the property that makes `checktor`
-trustworthy: a pattern sitting in a string literal or a comment is a different
-kind of node than a real call, so it never false-positives. Write the XPath, let
-`run_checks()` carry the rest, and your house rule is enforced as rigorously as
-the checks that ship in the box.
+trustworthy, because a pattern sitting in a string literal or a comment is a
+different kind of node than a real call, so it never false-positives.
+
+![The same three lines of R seen two ways. A regex matches the letter `T` three times, in a comment, inside a string literal, and as a real symbol. The parse tree instead types each one as `COMMENT`, `STR_CONST` and `SYMBOL`, so only the `SYMBOL` is a bare `T` and only it is flagged.](figures/ast-vs-regex-light.svg){.ct-fig .ct-light}
+![](figures/ast-vs-regex-dark.svg){.ct-fig .ct-dark aria-hidden="true"}
+
+Write the XPath, let `run_checks()` carry the rest, and your house rule is
+enforced as rigorously as the built-in checks.
 
 ## See also
 
